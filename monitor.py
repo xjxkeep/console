@@ -7,11 +7,11 @@ from PyQt5.QtCore import Qt,QTimer
 from PyQt5.QtWidgets import *
 from datetime import datetime
 from pkg.quic import HighwayQuicClient
-from protocol.highway_pb2 import Device
+from protocol.highway_pb2 import Device,Video
 import asyncio
 from pkg.decode import H264Decoder
 import numpy as np
-
+import time
 class StatusBar(QWidget):
     def update(self):
         self.date.setText(datetime.now().strftime("%Y/%m/%d %H:%M:%S"))
@@ -24,6 +24,9 @@ class StatusBar(QWidget):
     
     def update_download_speed(self,value:float):
         self.download.setText(f"{value/1024:.2f} kb/s")
+    
+    def update_latency(self,value:int):
+        self.signal.setText(f"{value} ms")
     
     def setupUi(self):
         layout=QHBoxLayout()
@@ -97,18 +100,25 @@ class Monitor(QWidget):
         self.timer.setInterval(1000)
         self.timer.timeout.connect(self.update_fps)
         self.timer.start()
-        self.client=HighwayQuicClient(Device(id=1,message_type=Device.MessageType.VIDEO),host="127.0.0.1",port=30042,ca_certs="assets/tls/cert.pem",insecure=True)
+        self.client=HighwayQuicClient(Device(id=1,message_type=Device.MessageType.VIDEO),host="106.15.75.226",port=30042,ca_certs="assets/tls/cert.pem",insecure=True)
         self.client.connected.connect(self.connected)
         self.decoder=H264Decoder()
-        self.client.video_stream.connect(self.decoder.write)
+        self.client.video_stream.connect(self.handle_video)
         self.decoder.frame_decoded.connect(self.display_video)
         self.client.upload_speed.connect(self.statusBar.update_upload_speed)
         self.client.download_speed.connect(self.statusBar.update_download_speed)
+        self.latency=0
         self.connectDevice(1)
+    
+    def handle_video(self,video:Video):
+        self.decoder.write(video.raw)
+        self.latency=int(time.time()*1000)-video.timestamp
+        
     
     def update_fps(self):
         self.statusBar.update_fps(self.fps)
         self.fps=0
+        self.statusBar.update_latency(self.latency)
     
     def connectDevice(self,device_id:int):
         self.client.start(device_id)

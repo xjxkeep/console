@@ -37,7 +37,7 @@ async def receive_message(reader:asyncio.StreamReader):
     return message
 
 class HighwayQuicClient(QObject):
-    video_stream = pyqtSignal(bytes)
+    video_stream = pyqtSignal(Video)
     connected = pyqtSignal()  # 新增连接状态信号
     connection_error = pyqtSignal(str)  # 新增错误信号
     upload_speed = pyqtSignal(float)
@@ -174,7 +174,7 @@ class HighwayQuicClient(QObject):
             while self.running:
                 data=f.read(5000)
                 if data:
-                    send_message(writer,Video(raw=data))
+                    send_message(writer,Video(raw=data,timestamp=int(time.time()*1000)))
                 else:break
                 await asyncio.sleep(0.01)
                 
@@ -184,7 +184,7 @@ class HighwayQuicClient(QObject):
             while self.running:
                 message = await self.receive_message(reader)
                 video = Video.FromString(message)
-                self.video_stream.emit(video.raw)
+                self.video_stream.emit(video)
         except asyncio.CancelledError:
             pass
         except Exception as e:
