@@ -15,6 +15,16 @@ import numpy as np
 class StatusBar(QWidget):
     def update(self):
         self.date.setText(datetime.now().strftime("%Y/%m/%d %H:%M:%S"))
+    
+    def update_fps(self,value:int):
+        self.fps.setText(f"{value} fps")
+    
+    def update_upload_speed(self,value:float):
+        self.upload.setText(f"{value/1024:.2f} kb/s")
+    
+    def update_download_speed(self,value:float):
+        self.download.setText(f"{value/1024:.2f} kb/s")
+    
     def setupUi(self):
         layout=QHBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignRight)
@@ -33,7 +43,7 @@ class StatusBar(QWidget):
         self.channel.setMenu(menu)
 
         self.timer=QTimer(self)
-        self.timer.setInterval(500)
+        self.timer.setInterval(1000)
         self.timer.timeout.connect(self.update)
         self.timer.start()
         self.sync=TransparentToolButton(FluentIcon.SYNC.icon())
@@ -66,9 +76,9 @@ class Monitor(QWidget):
     def setupUi(self):
         self.resize(800,600)
         layout=QVBoxLayout()
-        statusBar=StatusBar()
+        self.statusBar=StatusBar()
         
-        layout.addWidget(statusBar)
+        layout.addWidget(self.statusBar)
 
         self.display=QLabel()
         self.display.setStyleSheet("background-color: rgb(255,0,0)")
@@ -82,13 +92,23 @@ class Monitor(QWidget):
         super().__init__(parent)
         
         self.setupUi()
+        self.fps=0
+        self.timer=QTimer(self)
+        self.timer.setInterval(1000)
+        self.timer.timeout.connect(self.update_fps)
+        self.timer.start()
         self.client=HighwayQuicClient(Device(id=1,message_type=Device.MessageType.VIDEO),host="127.0.0.1",port=30042,ca_certs="assets/tls/cert.pem",insecure=True)
         self.client.connected.connect(self.connected)
         self.decoder=H264Decoder()
         self.client.video_stream.connect(self.decoder.write)
         self.decoder.frame_decoded.connect(self.display_video)
+        self.client.upload_speed.connect(self.statusBar.update_upload_speed)
+        self.client.download_speed.connect(self.statusBar.update_download_speed)
         self.connectDevice(1)
     
+    def update_fps(self):
+        self.statusBar.update_fps(self.fps)
+        self.fps=0
     
     def connectDevice(self,device_id:int):
         self.client.start(device_id)
@@ -98,6 +118,7 @@ class Monitor(QWidget):
     def display_video(self, image):
         try:
             # 将 numpy 数组转换为 QImage
+            self.fps+=1
             height, width, _ = image.shape
             bytes_per_line = 3 * width
             q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)

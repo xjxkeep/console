@@ -40,6 +40,8 @@ class HighwayQuicClient(QObject):
     video_stream = pyqtSignal(bytes)
     connected = pyqtSignal()  # 新增连接状态信号
     connection_error = pyqtSignal(str)  # 新增错误信号
+    upload_speed = pyqtSignal(float)
+    download_speed = pyqtSignal(float)
     
     def __init__(self, device:Device, host:str, port:int, ca_certs:str, insecure:bool) -> None:
         super().__init__()
@@ -52,6 +54,8 @@ class HighwayQuicClient(QObject):
         self.writer = None
         self.loop = None
         self.running = False
+        self.upload_bytes = 0
+        self.download_bytes = 0
         
         # QUIC configuration
         self.configuration = QuicConfiguration(alpn_protocols=["HLD"], is_client=True)
@@ -59,6 +63,20 @@ class HighwayQuicClient(QObject):
             self.configuration.load_verify_locations(self.ca_certs)
         if insecure:
             self.configuration.verify_mode = ssl.CERT_NONE
+
+    def send_message(self,writer:asyncio.StreamWriter,message:Message):
+        message = message.SerializeToString()
+        message = struct.pack("<L", len(message)) + message
+        self.upload_bytes += len(message)
+        writer.write(message)
+
+    async def receive_message(self,reader:asyncio.StreamReader):
+        length = await reader.readexactly(4)
+        length = struct.unpack("<L",length)[0]
+        message = await reader.readexactly(length)
+        self.download_bytes += len(message)
+        return message
+
 
     def start(self, source_device_id: int):
         """Start the client in a new thread"""
@@ -85,6 +103,14 @@ class HighwayQuicClient(QObject):
         if self.loop:
             self.loop.call_soon_threadsafe(self._cleanup)
 
+    async def __update_speed(self):
+        while self.running:
+            self.upload_speed.emit(self.upload_bytes)
+            self.download_speed.emit(self.download_bytes)
+            self.upload_bytes = 0
+            self.download_bytes = 0
+            await asyncio.sleep(1)
+    
     def _run_event_loop(self, source_device_id: int):
         """Run the event loop in a separate thread"""
         asyncio.set_event_loop(self.loop)
@@ -109,14 +135,19 @@ class HighwayQuicClient(QObject):
             
                 self.client = cast(HighwayClientProtocol, client)
                 self.connected.emit()
+                self.loop.create_task(self.__update_speed())
                 await self.establish_video_stream(source_device_id)
+                
+                 # Keep connection alive
+                while self.running:
+                    await asyncio.sleep(1)
         except Exception as e:
             self.connection_error.emit(str(e))
             raise
 
     async def establish_video_stream(self, source_device_id: int):
         """Establish video stream after connection"""
-        self.reader, self.writer = await self.client.create_stream(False)
+        reader, writer = await self.client.create_stream(False)
         
         # Register video stream
         register_msg = Register(
@@ -130,29 +161,28 @@ class HighwayQuicClient(QObject):
             )
         )
         print("send register message")
-        send_message(self.writer, register_msg)
+        self.send_message(writer, register_msg)
 
         # Start message reading task
-        self.loop.create_task(self._read_messages())
-        self.loop.create_task(self.send_test())
+        self.loop.create_task(self._read_video_stream(reader))
+        self.loop.create_task(self.send_test(writer))
         
-        # Keep connection alive
-        while self.running:
-            await asyncio.sleep(1)
+       
 
-    async def send_test(self):
+    async def send_test(self,writer:asyncio.StreamWriter):
         with open(r"/Users/xiongjinxin/workspace/endless/console/output.h264","rb") as f:
             while self.running:
                 data=f.read(5000)
                 if data:
-                    send_message(self.writer,Video(raw=data))
+                    send_message(writer,Video(raw=data))
                 else:break
                 await asyncio.sleep(0.01)
-    async def _read_messages(self):
+                
+    async def _read_video_stream(self,reader:asyncio.StreamReader):
         """Background task to read incoming messages"""
         try:
             while self.running:
-                message = await receive_message(self.reader)
+                message = await self.receive_message(reader)
                 video = Video.FromString(message)
                 self.video_stream.emit(video.raw)
         except asyncio.CancelledError:
