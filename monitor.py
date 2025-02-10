@@ -97,9 +97,8 @@ class Monitor(QWidget):
         print("connected")
     def display_video(self, image):
         try:
-            print(f"Received frame with shape: {image.shape}")
             # 将 numpy 数组转换为 QImage
-            height, width, channel = image.shape
+            height, width, _ = image.shape
             bytes_per_line = 3 * width
             q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
             # 将 QImage 显示在 QLabel 上

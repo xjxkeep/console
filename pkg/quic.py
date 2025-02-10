@@ -147,7 +147,7 @@ class HighwayQuicClient(QObject):
                 if data:
                     send_message(self.writer,Video(raw=data))
                 else:break
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.01)
     async def _read_messages(self):
         """Background task to read incoming messages"""
         try:
@@ -199,7 +199,6 @@ async def main(
         
         send_message(writer,Register(device=Device(id=1),subscribe_device=Device(id=1)))
         async def read_message():
-            print("read_message")
             while True:
                 message = await receive_message(reader)
                 control = Control.FromString(message)

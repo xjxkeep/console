@@ -11,7 +11,7 @@ class H264Decoder(QObject):
         super().__init__()
         self.process = (
             ffmpeg
-            .input("pipe:0",f="h264")
+            .input("",f="h264")
             .output('pipe:1', format='rawvideo',pix_fmt='rgb24')
             .run_async(pipe_stdout=True, pipe_stdin=True)
         )
