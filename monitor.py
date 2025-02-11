@@ -12,6 +12,7 @@ import asyncio
 from pkg.decode import H264Decoder
 import numpy as np
 import time
+import threading
 class StatusBar(QWidget):
     def update(self):
         self.date.setText(datetime.now().strftime("%Y/%m/%d %H:%M:%S"))
@@ -109,7 +110,17 @@ class Monitor(QWidget):
         self.client.upload_speed.connect(self.statusBar.update_upload_speed)
         self.client.download_speed.connect(self.statusBar.update_download_speed)
         self.latency=0
-        self.connectDevice()
+        # self.connectDevice()
+        threading.Thread(target=self.videoDecodeTest).start()
+    
+    def videoDecodeTest(self):
+        with open("output.h264","rb") as f:
+            while True:
+                data=f.read(9600)
+                if not data:
+                    break
+                self.decoder.write(data)
+                time.sleep(0.005)
     
     def handle_video(self,video:Video):
         self.decoder.write(video.raw)
