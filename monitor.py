@@ -74,7 +74,7 @@ class StatusBar(QWidget):
 
 
 class Monitor(QWidget):
-
+    # TODO 视频解码卡顿
 
     def setupUi(self):
         self.resize(800,600)
@@ -101,7 +101,7 @@ class Monitor(QWidget):
         self.timer.setInterval(1000)
         self.timer.timeout.connect(self.update_fps)
         self.timer.start()
-        self.client=HighwayQuicClient(Device(id=1,message_type=Device.MessageType.VIDEO),host="106.15.75.226",port=30042,ca_certs="assets/tls/cert.pem",insecure=True)
+        self.client=HighwayQuicClient(Device(id=1,message_type=Device.MessageType.VIDEO),host="127.0.0.1",port=30042,ca_certs="assets/tls/cert.pem",insecure=True,source_device_id=1)
         self.client.connected.connect(self.connected)
         self.decoder=H264Decoder()
         self.client.video_stream.connect(self.handle_video)
@@ -109,20 +109,20 @@ class Monitor(QWidget):
         self.client.upload_speed.connect(self.statusBar.update_upload_speed)
         self.client.download_speed.connect(self.statusBar.update_download_speed)
         self.latency=0
-        # self.connectDevice(1)
+        self.connectDevice()
     
     def handle_video(self,video:Video):
         self.decoder.write(video.raw)
-        self.latency=int(time.time()*1000)-video.timestamp
-        
+        print(int(time.time()*1000)%10000,video.timestamp%10000)
+        self.latency=int(time.time()*1000)%10000-video.timestamp%10000
     
     def update_fps(self):
         self.statusBar.update_fps(self.fps)
         self.fps=0
         self.statusBar.update_latency(self.latency)
     
-    def connectDevice(self,device_id:int):
-        self.client.start(device_id)
+    def connectDevice(self):
+        self.client.start()
     
     def connected(self):
         print("connected")
@@ -138,3 +138,19 @@ class Monitor(QWidget):
             self.display.setPixmap(pixmap)
         except Exception as e:
             print(f"Error displaying video: {str(e)}")
+
+
+if __name__=="__main__":
+    import sys
+    # TODO
+    # 1. 封装下请求的host 等参数 统一管理 后面host走下发
+    # 2. 界面完善
+    # 3. OTA
+
+    app=QApplication(sys.argv)
+
+    m=Monitor()
+    m.show()
+
+    app.exec()
+

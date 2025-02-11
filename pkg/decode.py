@@ -36,7 +36,7 @@ class H264Decoder(QObject):
         while self.running:
             data = self.process.stdout.read(self.frame_size)
             if not data:
-                time.sleep(0.01)
+                time.sleep(1)
                 continue
             frame = np.frombuffer(data, np.uint8)
             frame = frame.reshape([self.frame_height, self.frame_width, 3])

@@ -31,7 +31,7 @@ class HighwayQuicClient(QObject):
     upload_speed = pyqtSignal(float)
     download_speed = pyqtSignal(float)
     
-    def __init__(self, device:Device, host:str, port:int, ca_certs:str, insecure:bool,source_device_id:int=0) -> None:
+    def __init__(self, device:Device, host:str, port:int, ca_certs:str, insecure:bool,source_device_id:int=1) -> None:
         super().__init__()
         self.device = device
         self.host = host
@@ -65,7 +65,6 @@ class HighwayQuicClient(QObject):
         message = await reader.readexactly(length)
         self.download_bytes += len(message)
         return message
-
 
     def start(self):
         """Start the client in a new thread"""
@@ -125,7 +124,7 @@ class HighwayQuicClient(QObject):
                 self.connected.emit()
                 self.loop.create_task(self.__update_speed())
                 await self.establish_video_stream()
-                await self.establish_control_stream()
+                # await self.establish_control_stream()
                  # Keep connection alive
                 while self.running:
                     await asyncio.sleep(1)
@@ -135,7 +134,7 @@ class HighwayQuicClient(QObject):
 
     async def establish_video_stream(self):
         """Establish video stream after connection"""
-        reader, writer = await self.client.create_stream(False)
+        self.video_reader, self.video_writer = await self.client.create_stream(False)
         
         # Register video stream
         register_msg = Register(
@@ -149,11 +148,11 @@ class HighwayQuicClient(QObject):
             )
         )
         print("send register message")
-        self.send_message(writer, register_msg)
+        self.send_message(writer=self.video_writer,message=register_msg)
 
         # Start message reading task
-        self.loop.create_task(self._read_video_stream(reader))
-        self.loop.create_task(self.send_test(writer))
+        self.loop.create_task(self.send_test(writer=self.video_writer))
+        self.loop.create_task(self._read_video_stream(reader=self.video_reader))
     
     def send_control_message(self, values: list[int]):
         # TODO 发送速率小于生产速率会产生堆积 导致延迟
@@ -165,8 +164,7 @@ class HighwayQuicClient(QObject):
             future.result()  # 等待操作完成
     
     async def establish_control_stream(self):
-        reader,writer=await self.client.create_stream(False)
-        self.loop.create_task(self._read_control_stream(reader))
+        self.control_reader,self.control_writer=await self.client.create_stream(False)
         # Register control stream
         register_msg = Register(
             device=Device(
@@ -174,21 +172,21 @@ class HighwayQuicClient(QObject):
                 message_type=Device.MessageType.CONTROL
             )
         )
-        self.send_message(writer,register_msg)
-        self.loop.create_task(self.__send_control_message(writer))
+        self.send_message(writer=self.control_writer,message=register_msg)
+        self.loop.create_task(self.__send_control_message(writer=self.control_writer))
     
     async def __send_control_message(self,writer:asyncio.StreamWriter):
         while self.running:
             message=await self.control_stream_queue.get()
-            self.send_message(writer,message)
+            self.send_message(writer=writer,message=message)
             
    
     async def send_test(self,writer:asyncio.StreamWriter):
-        with open(r"/Users/xiongjinxin/workspace/endless/console/output.h264","rb") as f:
+        with open(r"C:\Users\xjx201\Desktop\console\output.h264","rb") as f:
             while self.running:
                 data=f.read(5000)
                 if data:
-                    self.send_message(writer,Video(raw=data,timestamp=int(time.time()*1000)))
+                    self.send_message(writer=writer,message=Video(raw=data,timestamp=int(time.time()*1000)%10000))
                 else:break
                 await asyncio.sleep(0.01)
                 
