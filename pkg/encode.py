@@ -1,6 +1,5 @@
 import ffmpeg
 import numpy as np
-import queue
 import threading
 import time
 from PyQt5.QtCore import QObject,pyqtSignal

@@ -84,6 +84,7 @@ class Monitor(QWidget):
         layout.addWidget(self.statusBar)
 
         self.display=QLabel()
+        self.display.setScaledContents(True)
         self.display.setStyleSheet("background-color: rgb(255,0,0)")
         layout.addWidget(self.display)
 
@@ -108,7 +109,7 @@ class Monitor(QWidget):
         self.client.upload_speed.connect(self.statusBar.update_upload_speed)
         self.client.download_speed.connect(self.statusBar.update_download_speed)
         self.latency=0
-        self.connectDevice(1)
+        # self.connectDevice(1)
     
     def handle_video(self,video:Video):
         self.decoder.write(video.raw)
