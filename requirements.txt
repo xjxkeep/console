@@ -1,3 +1,5 @@
 pygame
 aioquic
 ffmpeg-python
+PyQt-Fluent-Widgets[full]
+protobuf
