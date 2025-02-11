@@ -2,6 +2,7 @@ from qfluentwidgets import ProgressBar,SpinBox
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import *
 import sys
+from PyQt5.QtCore import QTimer
 
 class Channel(QWidget):
     channelSignal=pyqtSignal(int)
@@ -31,32 +32,45 @@ class Channel(QWidget):
     def setValue(self,x:int):
         self.channelValue=x
         self.progressBar.setValue(x+self.fineTune.value())
-        
+    
+    def getValue(self):
+        return self.channelValue+self.fineTune.value()
+    
     def onFineTuneChanged(self,x:int):
         self.progressBar.setValue(self.channelValue+x)
 
 class Controller(QWidget):
-    channelSignal=pyqtSignal(int,int)
+    channelSignal=pyqtSignal(list)
     def setupUi(self):
         self.setWindowTitle("Controller")
         self.resize(100, 100)
         layout=QVBoxLayout()
-        self.channels=[Channel() for _ in range(10)]
+        self.channels=[Channel() for _ in range(self.channelCount)]
         for idx,channel in enumerate(self.channels):
-            def onChannelValueChanged(x:int,idx=idx):
-                self.channelSignal.emit(idx,x)
             channel.setValue(10*idx+10)
             channel.setLabel(f"Channel{idx+1}")
-            channel.channelSignal.connect(onChannelValueChanged)
+            channel.channelSignal.connect(self.__updateChannelValues)
             layout.addWidget(channel)
         self.setLayout(layout)
         
     def __init__(self) -> None:
         super().__init__()
+        self.channelCount=10
         self.setupUi()
-        self.channelSignal.connect(self.channelValueChanged)
-    def channelValueChanged(self,idx:int,x:int):
-        print(f"Channel{idx+1} value changed to {x}")
+        self.timer=QTimer()
+        self.timer.timeout.connect(self.__updateChannelValues)
+        self.timer.start(1000)
+    
+    def __updateChannelValues(self):
+        self.channelSignal.emit(self.getChannelValues())
+    
+    def getChannelValues(self):
+        return [channel.getValue() for channel in self.channels]
+    # 更新通道值 
+    def setChannelValue(self,idx:int,x:int):
+        if idx<1 or idx>self.channelCount:
+            return
+        self.channels[idx-1].setValue(x)
         
 
 if __name__ == "__main__":
