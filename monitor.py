@@ -1,16 +1,12 @@
 from PyQt5.QtCore import Qt
-from qfluentwidgets import StyleSheetBase, Theme, isDarkTheme, qconfig
-from qfluentwidgets import button
 from qfluentwidgets import FluentIcon,FluentIconBase,TransparentPushButton,TransparentToolButton,TransparentDropDownPushButton,RoundMenu,Action
-from PyQt5.QtGui import QIcon,QColor,QImage,QPixmap
+from PyQt5.QtGui import QCloseEvent, QIcon,QColor,QImage,QPixmap
 from PyQt5.QtCore import Qt,QTimer
 from PyQt5.QtWidgets import *
 from datetime import datetime
 from pkg.quic import HighwayQuicClient
 from protocol.highway_pb2 import Device,Video
-import asyncio
-from pkg.decode import H264Decoder
-import numpy as np
+from pkg.codec import H264Decoder
 import time
 import threading
 class StatusBar(QWidget):
@@ -112,10 +108,10 @@ class Monitor(QWidget):
         self.client.download_speed.connect(self.statusBar.update_download_speed)
         self.latency=0
         # self.connectDevice()
-        # threading.Thread(target=self.videoDecodeTest).start()
+        threading.Thread(target=self.videoDecodeTest,daemon=True).start()
     
     def videoDecodeTest(self):
-        with open("output.h264","rb") as f:
+        with open(r"C:\Users\xjx201\Desktop\console\pkg\output.h264","rb") as f:
             while True:
                 data=f.read(9600)
                 if not data:
@@ -138,6 +134,7 @@ class Monitor(QWidget):
     
     def connected(self):
         print("connected")
+
     def display_video(self, image):
         try:
             # 将 numpy 数组转换为 QImage
@@ -151,6 +148,13 @@ class Monitor(QWidget):
         except Exception as e:
             print(f"Error displaying video: {str(e)}")
 
+    def closeEvent(self, a0: QCloseEvent | None) -> None:
+        print("close")
+        self.client.stop()
+        print("client stopped")
+        self.decoder.close()
+        print("decoder closed")
+        return super().closeEvent(a0)
 
 if __name__=="__main__":
     import sys

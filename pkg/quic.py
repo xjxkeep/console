@@ -204,10 +204,7 @@ class HighwayQuicClient(QObject):
 
     def _cleanup(self):
         """Cleanup resources when stopping"""
-        if self.writer:
-            self.writer.close()
-        if self.client:
-            self.client.close()
+        
         self.loop.stop()
 
 
