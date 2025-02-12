@@ -1,5 +1,6 @@
-from qfluentwidgets import ProgressBar,SpinBox,PillPushButton
-from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtWidgets import QWidget
+from qfluentwidgets import ProgressBar,SpinBox,PillPushButton,RoundMenu,FluentIcon,DropDownPushButton,ComboBox,TransparentPushButton,TransparentToolButton
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import *
 import sys
 from PyQt5.QtCore import QTimer
@@ -51,12 +52,64 @@ class Channel(QWidget):
     def onFineTuneChanged(self,x:int):
         self.progressBar.setValue(self.channelValue+x)
 
+
+class Detector(QWidget):
+    signal=pyqtSignal(int,int) # (channel,value)
+    def setupUi(self):
+        layout=QHBoxLayout()
+        self.devices=ComboBox(self)
+        self.refresh=TransparentToolButton(FluentIcon.SYNC.icon(),self)
+        self.label=TransparentPushButton(FluentIcon.GAME.icon(),"选择设备:",self)
+        self.refresh.clicked.connect(self.refreshDevices)
+        self.devices.currentIndexChanged.connect(self.deviceChosen)
+        layout.addWidget(self.label)
+        layout.addWidget(self.devices)
+        layout.addWidget(self.refresh)
+        self.setLayout(layout)
+    
+    def deviceChosen(self,idx:int):
+        device=self.deviceMap.get(idx)
+        if device is None:
+            return
+        self.__getattribute__(device["type"]).select_device(device["id"])
+        self.__getattribute__(device["type"]).signal.connect(self.signal.emit)
+        
+    def setDevices(self,devices:list):
+        self.devices.clear()
+        self.devices.addItems(devices)
+    
+    def getDevices(self):
+        deviceCount=0
+        devices=[]
+        # TODO 实现其他设备
+        joys=self.joystick.get_device_list()
+        for joy in joys:
+            devices.append(joy["name"])
+            self.deviceMap[deviceCount]={"id":joy["id"],"type":"joystick"} # type需要和变量名一致
+            deviceCount+=1
+        print(devices)
+        print(self.deviceMap)
+        return devices
+    
+    def refreshDevices(self):
+        self.setDevices(self.getDevices())
+        
+    def __init__(self) -> None:
+        super().__init__()
+        self.setupUi()
+        self.deviceMap=dict()
+        self.joystick=JoyStick()
+        self.joystick.init()
+
+
 class Controller(QWidget):
     controlMessage=pyqtSignal(list)
     def setupUi(self):
         self.setWindowTitle("Controller")
         self.resize(100, 100)
         layout=QVBoxLayout()
+        self.detector=Detector()
+        layout.addWidget(self.detector)
         self.channels=[Channel() for _ in range(self.channelCount)]
         for idx,channel in enumerate(self.channels):
             channel.setLabel(f"Channel{idx+1}")
@@ -71,9 +124,7 @@ class Controller(QWidget):
         self.timer=QTimer()
         self.timer.timeout.connect(self.__updateChannelValues)
         self.timer.start(1000)
-        self.joystick=JoyStick()
-        self.joystick.select_device(0)
-        self.joystick.signal.connect(self.setChannelValue)
+        self.detector.signal.connect(self.setChannelValue)
     
     def __updateChannelValues(self):
         self.controlMessage.emit(self.getChannelValues())
@@ -87,8 +138,7 @@ class Controller(QWidget):
         self.channels[idx-1].setValue(x)
     
     def closeEvent(self, a0) -> None:
-        self.joystick.running=False
-        self.joystick.thread.join()
+        
         super().closeEvent(a0)
         
 

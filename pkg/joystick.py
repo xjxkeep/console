@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QObject,pyqtSignal
+from PyQt5.QtCore import QObject,pyqtSignal,QTimer
 import pygame
 import threading
 import time
@@ -18,8 +18,9 @@ class JoyStick(ControllerBase):
         self.joystick = None
         self.device_id= None
         
-        self.thread=threading.Thread(target=self.update,daemon=True)
-        self.thread.start()
+        self.timer=QTimer()
+        self.timer.timeout.connect(self.update)
+        self.timer.start(100)
         
     def get_device_list(self):
         """获取所有已连接的手柄设备列表"""
@@ -31,6 +32,10 @@ class JoyStick(ControllerBase):
                 'name': joy.get_name()
             })
         return devices
+    
+    def init(self):
+        pygame.init()
+        pygame.joystick.init()
         
     def select_device(self, device_id: int):
         if self.device_id==device_id:
@@ -51,29 +56,23 @@ class JoyStick(ControllerBase):
         
 
     def update(self):
-        pygame.init()
-        pygame.joystick.init()
-        while self.running:
-            if not self.joystick or self.device_id is None:
-                time.sleep(0.1)
-                continue
-            time.sleep(0.02)
-            for event in pygame.event.get():
-                if event.type == pygame.JOYAXISMOTION:
-                    # 获取摇杆值（范围从-1到1）并转换为0到100
-                    axis_id = event.axis + 1  # 通道号从1开始
-                    current_value = int(event.value * 50) + 50
-                    self.signal.emit(axis_id, current_value)
-                
-                elif event.type == pygame.JOYBUTTONDOWN:
-                    # 按钮按下时发送值100
-                    channel = event.button + self.joystick.get_numaxes() + 1
-                    self.signal.emit(channel, 100)
-                    
-                elif event.type == pygame.JOYBUTTONUP:
-                    # 按钮释放时发送值0
-                    channel = event.button + self.joystick.get_numaxes() + 1
-                    self.signal.emit(channel, 0)
+        if not self.joystick or self.device_id is None:
+            time.sleep(0.1)
+            return
+
+        pygame.event.pump()  # 更新事件状态
+        # 获取所有轴的值
+        if self.joystick:
+            for axis in range(self.joystick.get_numaxes()):
+                value = self.joystick.get_axis(axis)
+                current_value = int(value * 50) + 50
+                self.signal.emit(axis + 1, current_value)
+            
+            # 获取按钮状态
+            for button in range(self.joystick.get_numbuttons()):
+                value = self.joystick.get_button(button)
+                channel = button + self.joystick.get_numaxes() + 1
+                self.signal.emit(channel, value * 100)
     def close(self):
         self.running=False
         self.thread.join()
