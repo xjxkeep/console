@@ -107,8 +107,8 @@ class Monitor(QWidget):
         self.client.upload_speed.connect(self.statusBar.update_upload_speed)
         self.client.download_speed.connect(self.statusBar.update_download_speed)
         self.latency=0
-        # self.connectDevice()
-        threading.Thread(target=self.videoDecodeTest,daemon=True).start()
+        self.connectDevice()
+        # threading.Thread(target=self.videoDecodeTest,daemon=True).start()
     
     def videoDecodeTest(self):
         with open(r"C:\Users\xjx201\Desktop\console\pkg\output.h264","rb") as f:
@@ -121,8 +121,8 @@ class Monitor(QWidget):
     
     def handle_video(self,video:Video):
         self.decoder.write(video.raw)
-        print(int(time.time()*1000)%10000,video.timestamp%10000)
-        self.latency=int(time.time()*1000)%10000-video.timestamp%10000
+       
+        self.latency=int(time.time()*1000)%1000-video.timestamp
     
     def update_fps(self):
         self.statusBar.update_fps(self.fps)

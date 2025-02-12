@@ -25,6 +25,7 @@ class HighwayClientProtocol(QuicConnectionProtocol):
 
 
 class HighwayQuicClient(QObject):
+    # TODO 流写入失败 重试
     video_stream = pyqtSignal(Video)
     connected = pyqtSignal()  # 新增连接状态信号
     connection_error = pyqtSignal(str)  # 新增错误信号
@@ -102,14 +103,14 @@ class HighwayQuicClient(QObject):
         """Run the event loop in a separate thread"""
         asyncio.set_event_loop(self.loop)
         try:
-            self.loop.run_until_complete(self.connect())
+            self.loop.run_until_complete(self.run())
             self.loop.run_forever()
         except Exception as e:
             self.connection_error.emit(str(e))
         finally:
             self.loop.close()
 
-    async def connect(self):
+    async def run(self):
         """Establish QUIC connection"""
         try:
             print("connect quic client")
@@ -124,7 +125,7 @@ class HighwayQuicClient(QObject):
                 self.connected.emit()
                 self.loop.create_task(self.__update_speed())
                 await self.establish_video_stream()
-                # await self.establish_control_stream()
+                await self.establish_control_stream()
                  # Keep connection alive
                 while self.running:
                     await asyncio.sleep(1)
@@ -182,11 +183,11 @@ class HighwayQuicClient(QObject):
             
    
     async def send_test(self,writer:asyncio.StreamWriter):
-        with open(r"C:\Users\xjx201\Desktop\console\output.h264","rb") as f:
+        with open(r"C:\Users\xjx201\Desktop\console\pkg\output.h264","rb") as f:
             while self.running:
                 data=f.read(5000)
                 if data:
-                    self.send_message(writer=writer,message=Video(raw=data,timestamp=int(time.time()*1000)%10000))
+                    self.send_message(writer=writer,message=Video(raw=data,timestamp=int(time.time()*1000)%1000))
                 else:break
                 await asyncio.sleep(0.01)
                 

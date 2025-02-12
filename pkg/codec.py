@@ -15,7 +15,8 @@ class H264Stream:
         self.running = True
 
     def __read(self):
-        acquired = self.semaphore.acquire(timeout=0.1)
+        if not self.running:return bytes()
+        acquired = self.semaphore.acquire()
         if not self.running or not acquired:
             return bytes()
         return self.buffer.popleft()
@@ -47,13 +48,14 @@ class H264Stream:
     
     def close(self):
         self.running = False
+        self.semaphore.release()
 
 class H264Decoder(QObject):
     frame_decoded = pyqtSignal(np.ndarray)
     def __init__(self, frame_height=1080, frame_width=1920, frame_size=None):
         super().__init__()
         self.stream=H264Stream()
-        self.container = av.open(self.stream,format='h264')
+        
         self.frame_height = frame_height
         self.frame_width = frame_width
         self.frame_size = frame_height * frame_width * 3
@@ -79,6 +81,7 @@ class H264Decoder(QObject):
                 time.sleep(0.01)
                 continue
             print("start decode")
+            self.container = av.open(self.stream,format='h264')
             for frame in self.container.decode(video=0):
                 self.frame_decoded.emit(frame.to_ndarray(format='rgb24'))
                 if not self.running:
