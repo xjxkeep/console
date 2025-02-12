@@ -54,7 +54,7 @@ class Channel(QWidget):
 
 
 class Detector(QWidget):
-    signal=pyqtSignal(int,int) # (channel,value)
+    signal=pyqtSignal(list) # (channel,value)
     loading=pyqtSignal(str)
     def setupUi(self):
         layout=QHBoxLayout()
@@ -127,16 +127,16 @@ class Controller(QWidget):
         self.channelCount=10
         self.setupUi()
         self.detector.signal.connect(self.setChannelValue)
-    
-   
+
     
     def getChannelValues(self):
         return [channel.getValue() for channel in self.channels]
     # 更新通道值 
-    def setChannelValue(self,idx:int,x:int):
-        if idx<1 or idx>self.channelCount:
-            return
-        self.channels[idx-1].setValue(x)
+    def setChannelValue(self,values:list):
+        for idx,value in enumerate(values):
+            if idx>=self.channelCount:
+                break
+            self.channels[idx].setValue(value)
     
     def closeEvent(self, a0) -> None:
         

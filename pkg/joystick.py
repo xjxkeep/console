@@ -4,7 +4,7 @@ import threading
 import time
 
 class ControllerBase(QObject):
-    signal=pyqtSignal(int,int) # (channel,value)
+    signal=pyqtSignal(list) # (values)
     def __init__(self) -> None:
         super().__init__()
         
@@ -62,16 +62,17 @@ class JoyStick(ControllerBase):
         pygame.event.pump()  # 更新事件状态
         # 获取所有轴的值
         if self.joystick:
+            values=[]
             for axis in range(self.joystick.get_numaxes()):
                 value = self.joystick.get_axis(axis)
                 current_value = int(value * 50) + 50
-                self.signal.emit(axis + 1, current_value)
+                values.append(current_value)
             
             # 获取按钮状态
             for button in range(self.joystick.get_numbuttons()):
                 value = self.joystick.get_button(button)
-                channel = button + self.joystick.get_numaxes() + 1
-                self.signal.emit(channel, value * 100)
+                values.append(value * 100)
+            self.signal.emit(values)
     def close(self):
         self.running=False
         self.thread.join()
