@@ -99,6 +99,7 @@ class Monitor(QWidget):
         self.timer.setInterval(1000)
         self.timer.timeout.connect(self.update_fps)
         self.timer.start()
+        # TODO quic client 移到外面
         self.client=HighwayQuicClient(Device(id=1,message_type=Device.MessageType.VIDEO),host="127.0.0.1",port=30042,ca_certs="assets/tls/cert.pem",insecure=True,source_device_id=1)
         self.client.connected.connect(self.connected)
         self.decoder=H264Decoder()
