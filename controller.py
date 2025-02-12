@@ -55,6 +55,7 @@ class Channel(QWidget):
 
 class Detector(QWidget):
     signal=pyqtSignal(int,int) # (channel,value)
+    loading=pyqtSignal(str)
     def setupUi(self):
         layout=QHBoxLayout()
         self.devices=ComboBox(self)
@@ -98,13 +99,18 @@ class Detector(QWidget):
         super().__init__()
         self.setupUi()
         self.deviceMap=dict()
+        self.loading.emit("加载中...")
+        
         self.joystick=JoyStick()
         self.joystick.init()
+        
+        self.loading.emit("加载成功")
 
 
 class Controller(QWidget):
     controlMessage=pyqtSignal(list)
     def setupUi(self):
+        self.setObjectName("Controller")
         self.setWindowTitle("Controller")
         self.resize(100, 100)
         layout=QVBoxLayout()
@@ -113,7 +119,6 @@ class Controller(QWidget):
         self.channels=[Channel() for _ in range(self.channelCount)]
         for idx,channel in enumerate(self.channels):
             channel.setLabel(f"Channel{idx+1}")
-            channel.channelSignal.connect(self.__updateChannelValues)
             layout.addWidget(channel)
         self.setLayout(layout)
         
@@ -121,13 +126,9 @@ class Controller(QWidget):
         super().__init__()
         self.channelCount=10
         self.setupUi()
-        self.timer=QTimer()
-        self.timer.timeout.connect(self.__updateChannelValues)
-        self.timer.start(1000)
         self.detector.signal.connect(self.setChannelValue)
     
-    def __updateChannelValues(self):
-        self.controlMessage.emit(self.getChannelValues())
+   
     
     def getChannelValues(self):
         return [channel.getValue() for channel in self.channels]

@@ -20,7 +20,7 @@ class JoyStick(ControllerBase):
         
         self.timer=QTimer()
         self.timer.timeout.connect(self.update)
-        self.timer.start(100)
+        self.timer.start(50)
         
     def get_device_list(self):
         """获取所有已连接的手柄设备列表"""
@@ -57,7 +57,6 @@ class JoyStick(ControllerBase):
 
     def update(self):
         if not self.joystick or self.device_id is None:
-            time.sleep(0.1)
             return
 
         pygame.event.pump()  # 更新事件状态

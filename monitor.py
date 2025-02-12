@@ -78,6 +78,7 @@ class Monitor(QWidget):
     # TODO 视频解码卡顿
 
     def setupUi(self):
+        self.setObjectName("Monitor")
         self.resize(800,600)
         layout=QVBoxLayout()
         self.statusBar=StatusBar()
@@ -111,7 +112,7 @@ class Monitor(QWidget):
         self.client.download_speed.connect(self.statusBar.update_download_speed)
         self.latency=0
         # self.connectDevice()
-        threading.Thread(target=self.videoDecodeTest).start()
+        # threading.Thread(target=self.videoDecodeTest).start()
     
     def videoDecodeTest(self):
         with open("output.h264","rb") as f:
