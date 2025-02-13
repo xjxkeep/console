@@ -52,13 +52,10 @@ class H264Stream:
 
 class H264Decoder(QObject):
     frame_decoded = pyqtSignal(np.ndarray)
-    def __init__(self, frame_height=1080, frame_width=1920, frame_size=None):
+    def __init__(self):
         super().__init__()
         self.stream=H264Stream()
         
-        self.frame_height = frame_height
-        self.frame_width = frame_width
-        self.frame_size = frame_height * frame_width * 3
         self.decode_thread = threading.Thread(target=self.__decode_frames,daemon=True)
         self.has_data = False
         self.running = True

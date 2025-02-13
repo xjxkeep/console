@@ -7,7 +7,7 @@ from typing import Dict, Optional, cast
 from aioquic.asyncio.client import connect
 from aioquic.asyncio.protocol import QuicConnectionProtocol
 from aioquic.quic.configuration import QuicConfiguration
-from aioquic.quic.events import QuicEvent, StreamDataReceived
+from aioquic.quic.events import QuicEvent, StreamDataReceived,ConnectionTerminated
 from aioquic.quic.logger import QuicFileLogger
 from PyQt5.QtCore import QObject,pyqtSignal
 from google.protobuf.message import Message
@@ -19,25 +19,34 @@ from asyncio import Queue
 logger = logging.getLogger("client")
 
 
-class HighwayClientProtocol(QuicConnectionProtocol):
+class HighwayClientProtocol(QuicConnectionProtocol,QObject):
+    quic_connection_lost = pyqtSignal()
     def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+        QuicConnectionProtocol.__init__(self, *args, **kwargs)
+        QObject.__init__(self)
 
+    def quic_event_received(self, event: QuicEvent) -> None:
+        if isinstance(event, ConnectionTerminated):
+            self.quic_connection_lost.emit()
+        return super().quic_event_received(event)
 
 class HighwayQuicClient(QObject):
     # TODO 流写入失败 重试
     receive_video = pyqtSignal(Video)
     connected = pyqtSignal()  # 新增连接状态信号
     connection_error = pyqtSignal(str)  # 新增错误信号
+    
     upload_speed = pyqtSignal(float)
     download_speed = pyqtSignal(float)
     
-    def __init__(self, device:Device, host:str, port:int, ca_certs:str, insecure:bool,source_device_id:int=1) -> None:
+    video_stream_failed = pyqtSignal(str)
+    control_stream_failed = pyqtSignal(str)
+    
+    def __init__(self, device:Device, host:str, port:int, insecure:bool,source_device_id:int=1) -> None:
         super().__init__()
         self.device = device
         self.host = host
         self.port = port
-        self.ca_certs = ca_certs
         self.client = None
         self.reader = None
         self.writer = None
@@ -49,10 +58,18 @@ class HighwayQuicClient(QObject):
         self.control_stream_queue=Queue()
         # QUIC configuration
         self.configuration = QuicConfiguration(alpn_protocols=["HLD"], is_client=True)
-        if self.ca_certs:
-            self.configuration.load_verify_locations(self.ca_certs)
         if insecure:
             self.configuration.verify_mode = ssl.CERT_NONE
+        self.video_stream_failed.connect(self.reconnect_video_stream)
+        self.control_stream_failed.connect(self.reconnect_control_stream)
+    
+    def reconnect_video_stream(self):
+        print("reconnect video stream")
+        self.loop.create_task(self.establish_video_stream())
+
+    def reconnect_control_stream(self):
+        print("reconnect control stream")
+        self.loop.create_task(self.establish_control_stream())
 
     def send_message(self,writer:asyncio.StreamWriter,message:Message):
         message = message.SerializeToString()
@@ -90,14 +107,16 @@ class HighwayQuicClient(QObject):
         self.running = False
         
         # Stop the event loop
-        if self.loop.is_running():
+        if self.loop and self.loop.is_running():
             self.loop.call_soon_threadsafe(self.loop.stop)
         
+        
         # Wait for the thread to finish
-        self.thread.join()
+        if self.thread:
+            self.thread.join()
         
         # Close the loop if it's not already closed
-        if not self.loop.is_closed():
+        if self.loop and not self.loop.is_closed():
             self.loop.close()
 
     async def __update_speed(self):
@@ -119,6 +138,10 @@ class HighwayQuicClient(QObject):
         finally:
             self.loop.close()
 
+    def connection_lost(self):
+        print("connection lost")
+        self.connection_error.emit("quic lost")
+
     async def run(self):
         """Establish QUIC connection"""
         try:
@@ -129,18 +152,20 @@ class HighwayQuicClient(QObject):
                 configuration=self.configuration,
                 create_protocol=HighwayClientProtocol,
             ) as client:
-            
                 self.client = cast(HighwayClientProtocol, client)
+                self.client.quic_connection_lost.connect(self.connection_lost)
                 self.connected.emit()
                 self.loop.create_task(self.__update_speed())
-                await self.establish_video_stream()
-                await self.establish_control_stream()
+                self.loop.create_task(self.establish_video_stream())
+                self.loop.create_task(self.establish_control_stream())
                  # Keep connection alive
                 while self.running:
+                    # Check if client is still connected
                     await asyncio.sleep(1)
         except Exception as e:
+            print("connect error:",e)
             self.connection_error.emit(str(e))
-            raise
+            
 
     async def establish_video_stream(self):
         """Establish video stream after connection"""
@@ -164,7 +189,7 @@ class HighwayQuicClient(QObject):
         self.loop.create_task(self.send_test(writer=self.video_writer))
         self.loop.create_task(self._read_video_stream(reader=self.video_reader))
     
-    def send_control_message(self, values: list[int]):
+    def send_control_message(self, values: list):
         # TODO 发送速率小于生产速率会产生堆积 导致延迟
         if self.loop and self.running:
             future = asyncio.run_coroutine_threadsafe(
@@ -186,19 +211,22 @@ class HighwayQuicClient(QObject):
         self.loop.create_task(self.__send_control_message(writer=self.control_writer))
     
     async def __send_control_message(self,writer:asyncio.StreamWriter):
-        while self.running:
-            message=await self.control_stream_queue.get()
-            self.send_message(writer=writer,message=message)
+        try:
+            while self.running:
+                message=await self.control_stream_queue.get()
+                self.send_message(writer=writer,message=message)
+        except Exception as e:
+            self.control_stream_failed.emit(f"Send control message error: {str(e)}")
             
    
     async def send_test(self,writer:asyncio.StreamWriter):
-        with open(r"output.h264","rb") as f:
+        with open(r"output2.h264","rb") as f:
             while self.running:
                 data=f.read(5000)
                 if data:
                     self.send_message(writer=writer,message=Video(raw=data,timestamp=int(time.time()*1000)%1000))
                 else:break
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(0.02)
                 
     async def _read_video_stream(self,reader:asyncio.StreamReader):
         """Background task to read incoming messages"""
@@ -206,11 +234,12 @@ class HighwayQuicClient(QObject):
             while self.running:
                 message = await self.receive_message(reader)
                 video = Video.FromString(message)
+                
                 self.receive_video.emit(video)
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            self.connection_error.emit(f"Read error: {str(e)}")
+            self.video_stream_failed.emit(f"Read error: {str(e)}")
 
 
         

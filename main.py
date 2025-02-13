@@ -1,5 +1,6 @@
 from monitor import Monitor
 from controller import Controller
+from debug import Debug
 import sys
 from PyQt5.QtWidgets import QApplication
 from qfluentwidgets import FluentWindow,FluentIcon,NavigationItemPosition
@@ -19,10 +20,13 @@ class MainWindow(FluentWindow):
         
         self.monitor=Monitor()
         self.controller=Controller()
-        
+        self.debug=Debug()
 
         self.addSubInterface(self.monitor,FluentIcon.MOVIE, "Monitor")
         self.addSubInterface(self.controller,FluentIcon.GAME, "Controller")
+        self.addSubInterface(self.debug,FluentIcon.SETTING, "Debug")
+        
+        
         
     def __init__(self):
         super().__init__()
@@ -32,15 +36,18 @@ class MainWindow(FluentWindow):
         self.client=HighwayQuicClient(self.device,
                                       host="127.0.0.1",
                                       port=30042,
-                                      ca_certs="assets/tls/cert.pem",
                                       insecure=True,
                                       source_device_id=self.source_device_id)
-
+    
         self.client.receive_video.connect(self.monitor.handle_video)
         self.client.upload_speed.connect(self.monitor.update_upload_speed)
         self.client.download_speed.connect(self.monitor.update_download_speed)
         self.client.connected.connect(self.quic_client_connected)
         self.client.connection_error.connect(self.quic_client_connection_error)
+        # controller 发送控制消息
+        self.controller.controlMessage.connect(self.client.send_control_message)
+        
+        self.client.start()
         
     def quic_client_connected(self):
         print("quic client connected")

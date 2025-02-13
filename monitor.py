@@ -81,10 +81,10 @@ class Monitor(QWidget):
         
         layout.addWidget(self.statusBar)
 
-        self.display=QLabel()
+        self.display=QLabel("无信号，等待客户端连接...")
         self.display.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.display.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        self.display.setStyleSheet("background-color: rgb(0,0,0)")
+        self.display.setStyleSheet("background-color: rgb(0,0,0);color: rgb(255,255,255);")
         layout.addWidget(self.display)
         
         

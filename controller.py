@@ -128,7 +128,6 @@ class Controller(QWidget):
         self.setupUi()
         self.detector.signal.connect(self.setChannelValue)
 
-    
     def getChannelValues(self):
         return [channel.getValue() for channel in self.channels]
     # 更新通道值 
@@ -137,6 +136,7 @@ class Controller(QWidget):
             if idx>=self.channelCount:
                 break
             self.channels[idx].setValue(value)
+        self.controlMessage.emit(self.getChannelValues())
     
     def closeEvent(self, a0) -> None:
         
