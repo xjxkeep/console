@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QWidget
-from qfluentwidgets import ProgressBar,SpinBox,PillPushButton,RoundMenu,FluentIcon,DropDownPushButton,ComboBox,TransparentPushButton,TransparentToolButton
+from qfluentwidgets import *
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import *
 import sys
@@ -48,6 +48,12 @@ class Channel(QWidget):
     
     def getValue(self):
         return self.channelValue+self.fineTune.value()
+    
+    def setFineTune(self,x:int):
+        self.fineTune.setValue(x)
+    
+    def getFineTune(self):
+        return self.fineTune.value()
     
     def onFineTuneChanged(self,x:int):
         self.progressBar.setValue(self.channelValue+x)
@@ -107,11 +113,14 @@ class Detector(QWidget):
         self.loading.emit("加载成功")
 
 
-class Controller(QWidget):
+class Controller(ScrollArea):
     controlMessage=pyqtSignal(list)
     def setupUi(self):
         self.setObjectName("Controller")
         self.setWindowTitle("Controller")
+        self.setWidgetResizable(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setWidget(QWidget())
         self.resize(100, 100)
         layout=QVBoxLayout()
         self.detector=Detector()
@@ -119,12 +128,14 @@ class Controller(QWidget):
         self.channels=[Channel() for _ in range(self.channelCount)]
         for idx,channel in enumerate(self.channels):
             channel.setLabel(f"Channel{idx+1}")
+            channel.setFineTune(self.setting.get(f"Channel{idx+1}",0))
             layout.addWidget(channel)
-        self.setLayout(layout)
+        self.widget().setLayout(layout)
         
-    def __init__(self) -> None:
+    def __init__(self,setting:dict) -> None:
         super().__init__()
-        self.channelCount=10
+        self.setting=setting
+        self.channelCount=self.setting.get("channel_count",10)
         self.setupUi()
         self.detector.signal.connect(self.setChannelValue)
 
@@ -139,7 +150,10 @@ class Controller(QWidget):
         self.controlMessage.emit(self.getChannelValues())
     
     def closeEvent(self, a0) -> None:
-        
+        print("controller closeEvent")
+        self.setting["channel_count"]=self.channelCount
+        for idx,channel in enumerate(self.channels):
+            self.setting[f"Channel{idx+1}"]=channel.getFineTune()
         super().closeEvent(a0)
         
 

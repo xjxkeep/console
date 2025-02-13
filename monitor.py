@@ -100,9 +100,9 @@ class Monitor(QWidget):
 
 
 
-    def __init__(self,parent=None) -> None:
+    def __init__(self,setting:dict,parent=None) -> None:
         super().__init__(parent)
-        
+        self.setting=setting
         self.setupUi()
         self.fps=0
         self.timer=QTimer(self)
