@@ -26,7 +26,7 @@ class HighwayClientProtocol(QuicConnectionProtocol):
 
 class HighwayQuicClient(QObject):
     # TODO 流写入失败 重试
-    video_stream = pyqtSignal(Video)
+    receive_video = pyqtSignal(Video)
     connected = pyqtSignal()  # 新增连接状态信号
     connection_error = pyqtSignal(str)  # 新增错误信号
     upload_speed = pyqtSignal(float)
@@ -76,20 +76,29 @@ class HighwayQuicClient(QObject):
         self.loop = asyncio.new_event_loop()
         
         # Start event loop in new thread
-        thread = threading.Thread(
+        self.thread = threading.Thread(
             target=self._run_event_loop,
             daemon=True
         )
-        thread.start()
+        self.thread.start()
 
-    def stop(self):
+    def close(self):
         """Stop the client and cleanup resources"""
         if not self.running:
             return
             
         self.running = False
-        if self.loop:
-            self.loop.call_soon_threadsafe(self._cleanup)
+        
+        # Stop the event loop
+        if self.loop.is_running():
+            self.loop.call_soon_threadsafe(self.loop.stop)
+        
+        # Wait for the thread to finish
+        self.thread.join()
+        
+        # Close the loop if it's not already closed
+        if not self.loop.is_closed():
+            self.loop.close()
 
     async def __update_speed(self):
         while self.running:
@@ -183,13 +192,13 @@ class HighwayQuicClient(QObject):
             
    
     async def send_test(self,writer:asyncio.StreamWriter):
-        with open(r"C:\Users\xjx201\Desktop\console\pkg\output.h264","rb") as f:
+        with open(r"output.h264","rb") as f:
             while self.running:
                 data=f.read(5000)
                 if data:
                     self.send_message(writer=writer,message=Video(raw=data,timestamp=int(time.time()*1000)%1000))
                 else:break
-                await asyncio.sleep(0.01)
+                await asyncio.sleep(0.05)
                 
     async def _read_video_stream(self,reader:asyncio.StreamReader):
         """Background task to read incoming messages"""
@@ -197,16 +206,14 @@ class HighwayQuicClient(QObject):
             while self.running:
                 message = await self.receive_message(reader)
                 video = Video.FromString(message)
-                self.video_stream.emit(video)
+                self.receive_video.emit(video)
         except asyncio.CancelledError:
             pass
         except Exception as e:
             self.connection_error.emit(f"Read error: {str(e)}")
 
-    def _cleanup(self):
-        """Cleanup resources when stopping"""
+
         
-        self.loop.stop()
 
 
 

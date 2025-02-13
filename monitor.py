@@ -82,11 +82,21 @@ class Monitor(QWidget):
         layout.addWidget(self.statusBar)
 
         self.display=QLabel()
-        self.display.setScaledContents(True)
-        self.display.setStyleSheet("background-color: rgb(255,0,0)")
+        self.display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.display.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.display.setStyleSheet("background-color: rgb(0,0,0)")
         layout.addWidget(self.display)
+        
+        
+        self.testButton=QPushButton("测试视频解码")
+        self.testButton.clicked.connect(self.test)
+        layout.addWidget(self.testButton)
+        
+        
 
         self.setLayout(layout)
+        
+        self.__frame=None
 
 
 
@@ -99,20 +109,21 @@ class Monitor(QWidget):
         self.timer.setInterval(1000)
         self.timer.timeout.connect(self.update_fps)
         self.timer.start()
-        # TODO quic client 移到外面
-        self.client=HighwayQuicClient(Device(id=1,message_type=Device.MessageType.VIDEO),host="127.0.0.1",port=30042,ca_certs="assets/tls/cert.pem",insecure=True,source_device_id=1)
-        self.client.connected.connect(self.connected)
         self.decoder=H264Decoder()
-        self.client.video_stream.connect(self.handle_video)
-        self.decoder.frame_decoded.connect(self.display_video)
-        self.client.upload_speed.connect(self.statusBar.update_upload_speed)
-        self.client.download_speed.connect(self.statusBar.update_download_speed)
+        self.decoder.frame_decoded.connect(self.display_frame)
         self.latency=0
-        self.connectDevice()
-        # threading.Thread(target=self.videoDecodeTest,daemon=True).start()
+    
+    def update_upload_speed(self,value:float):
+        self.statusBar.update_upload_speed(value)
+    
+    def update_download_speed(self,value:float):
+        self.statusBar.update_download_speed(value)
+    
+    def test(self):
+        threading.Thread(target=self.videoDecodeTest,daemon=True).start()
     
     def videoDecodeTest(self):
-        with open(r"C:\Users\xjx201\Desktop\console\pkg\output.h264","rb") as f:
+        with open(r"output.h264","rb") as f:
             while True:
                 data=f.read(9600)
                 if not data:
@@ -122,7 +133,6 @@ class Monitor(QWidget):
     
     def handle_video(self,video:Video):
         self.decoder.write(video.raw)
-       
         self.latency=int(time.time()*1000)%1000-video.timestamp
     
     def update_fps(self):
@@ -130,29 +140,25 @@ class Monitor(QWidget):
         self.fps=0
         self.statusBar.update_latency(self.latency)
     
-    def connectDevice(self):
-        self.client.start()
     
-    def connected(self):
-        print("connected")
-
-    def display_video(self, image):
+    def display_frame(self, image):
         try:
-            # 将 numpy 数组转换为 QImage
-            self.fps+=1
+            # Increment the frame count
+            self.fps += 1
             height, width, _ = image.shape
             bytes_per_line = 3 * width
             q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
-            # 将 QImage 显示在 QLabel 上
-            pixmap = QPixmap.fromImage(q_img)
-            self.display.setPixmap(pixmap)
+            # Convert QImage to QPixmap
+            self.__frame = QPixmap.fromImage(q_img)
+            
+            # Scale the pixmap to fit the QLabel's size
+            scaled_pixmap = self.__frame.scaled(self.display.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.display.setPixmap(scaled_pixmap)
+        
         except Exception as e:
             print(f"Error displaying video: {str(e)}")
 
     def closeEvent(self, a0: QCloseEvent | None) -> None:
-        print("close")
-        self.client.stop()
-        print("client stopped")
         self.decoder.close()
         print("decoder closed")
         return super().closeEvent(a0)
