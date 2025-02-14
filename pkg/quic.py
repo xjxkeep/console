@@ -76,11 +76,12 @@ class HighwayQuicClient(QObject):
         print("reconnect control stream")
         self.loop.create_task(self.establish_control_stream())
 
-    def send_message(self,writer:asyncio.StreamWriter,message:Message):
+    async def send_message(self,writer:asyncio.StreamWriter,message:Message):
         message = message.SerializeToString()
         message = struct.pack("<L", len(message)) + message
         self.upload_bytes += len(message)
         writer.write(message)
+        await writer.drain()
 
     async def receive_message(self,reader:asyncio.StreamReader):
         length = await reader.readexactly(4)
@@ -188,7 +189,7 @@ class HighwayQuicClient(QObject):
             )
         )
         print("send register message")
-        self.send_message(writer=self.video_writer,message=register_msg)
+        await self.send_message(writer=self.video_writer,message=register_msg)
 
         # Start message reading task
         self.video_encoder.start()
@@ -213,30 +214,32 @@ class HighwayQuicClient(QObject):
                 message_type=Device.MessageType.CONTROL
             )
         )
-        self.send_message(writer=self.control_writer,message=register_msg)
+        await self.send_message(writer=self.control_writer,message=register_msg)
         self.loop.create_task(self.__send_control_message(writer=self.control_writer))
     
     async def __send_control_message(self,writer:asyncio.StreamWriter):
         try:
             while self.running:
                 message=await self.control_stream_queue.get()
-                self.send_message(writer=writer,message=message)
+                await self.send_message(writer=writer,message=message)
         except Exception as e:
             self.control_stream_failed.emit(f"Send control message error: {str(e)}")
     
     def send_video_test_data(self):
-        data=self.video_encoder.read()
-        self.send_message(writer=self.video_writer,message=Video(raw=data,timestamp=int(time.time()*1000)%1000))
-   
-       
-       
+        data = self.video_encoder.read()
+        if self.loop and self.running:
+            future = asyncio.run_coroutine_threadsafe(
+                self.send_message(writer=self.video_writer, message=Video(raw=data, timestamp=int(time.time()*1000)%1000)),
+                self.loop
+            )
+            future.result()  # Wait for completion
    
     async def send_test(self,writer:asyncio.StreamWriter):
         with open(r"demo.h264","rb") as f:
             while self.running:
                 data=f.read(5000)
                 if data:
-                    self.send_message(writer=writer,message=Video(raw=data,timestamp=int(time.time()*1000)%1000))
+                    await self.send_message(writer=writer,message=Video(raw=data,timestamp=int(time.time()*1000)%1000))
                 else:break
                 await asyncio.sleep(0.02)
                 
