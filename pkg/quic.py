@@ -38,6 +38,8 @@ class HighwayQuicClient(QObject):
     
     upload_speed = pyqtSignal(float)
     download_speed = pyqtSignal(float)
+    latency = pyqtSignal(int)
+    
     
     video_stream_failed = pyqtSignal(str)
     control_stream_failed = pyqtSignal(str)
@@ -58,6 +60,8 @@ class HighwayQuicClient(QObject):
         self.decoder=H264Decoder()
         self.decoder.frame_decoded.connect(self.receive_video.emit)
         self.control_stream_queue=Queue()
+        self.latency_sum=0
+        self.latency_count=0
         # QUIC configuration
         self.configuration = QuicConfiguration(alpn_protocols=["HLD"], is_client=True)
         if insecure:
@@ -111,7 +115,8 @@ class HighwayQuicClient(QObject):
             return
             
         self.running = False
-        
+        self.video_encoder.close()
+        self.decoder.close()
         # Stop the event loop
         if self.loop and self.loop.is_running():
             self.loop.call_soon_threadsafe(self.loop.stop)
@@ -162,6 +167,7 @@ class HighwayQuicClient(QObject):
                 self.client.quic_connection_lost.connect(self.connection_lost)
                 self.connected.emit()
                 self.loop.create_task(self.__update_speed())
+                self.loop.create_task(self.metric_collect())
                 self.loop.create_task(self.establish_video_stream())
                 self.loop.create_task(self.establish_control_stream())
                  # Keep connection alive
@@ -229,7 +235,7 @@ class HighwayQuicClient(QObject):
         data = self.video_encoder.read()
         if self.loop and self.running:
             future = asyncio.run_coroutine_threadsafe(
-                self.send_message(writer=self.video_writer, message=Video(raw=data, timestamp=int(time.time()*1000)%1000)),
+                self.send_message(writer=self.video_writer, message=Video(raw=data, timestamp=int(time.time()*1000)%10000)),
                 self.loop
             )
             future.result()  # Wait for completion
@@ -239,10 +245,18 @@ class HighwayQuicClient(QObject):
             while self.running:
                 data=f.read(5000)
                 if data:
-                    await self.send_message(writer=writer,message=Video(raw=data,timestamp=int(time.time()*1000)%1000))
+                    await self.send_message(writer=writer,message=Video(raw=data,timestamp=int(time.time()*1000)%10000))
                 else:break
                 await asyncio.sleep(0.02)
-                
+    
+    async def metric_collect(self):
+        while self.running:
+            await asyncio.sleep(1)
+            if self.latency_count>0:
+                self.latency.emit(self.latency_sum//self.latency_count)
+                self.latency_sum=0
+                self.latency_count=0
+            
     async def _read_video_stream(self,reader:asyncio.StreamReader):
         """Background task to read incoming messages"""
         try:
@@ -250,7 +264,8 @@ class HighwayQuicClient(QObject):
                 message = await self.receive_message(reader)
                 video = Video.FromString(message)
                 self.decoder.write(video.raw)
-                
+                self.latency_sum+=int(time.time()*1000)%10000-video.timestamp
+                self.latency_count+=1
         except asyncio.CancelledError:
             pass
         except Exception as e:

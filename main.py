@@ -53,6 +53,7 @@ class MainWindow(FluentWindow):
         self.client.connected.connect(self.quic_client_connected)
         self.client.connection_error.connect(self.quic_client_connection_error)
         self.client.receive_video.connect(self.update_monitor)
+        self.client.latency.connect(self.monitor.update_latency)
         # controller 发送控制消息
         self.controller.controlMessage.connect(self.client.send_control_message)
         self.monitor.startSignal.connect(self.client.start)

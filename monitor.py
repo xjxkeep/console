@@ -133,11 +133,12 @@ class Monitor(QWidget):
                 self.decoder.write(data)
                 time.sleep(0.005)
   
+    def update_latency(self,value:int):
+        self.statusBar.update_latency(value)
     
     def update_fps(self):
         self.statusBar.update_fps(self.fps)
         self.fps=0
-        self.statusBar.update_latency(self.latency)
     
     
     def setPixmap(self, pixmap:QPixmap):
