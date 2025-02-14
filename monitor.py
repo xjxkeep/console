@@ -113,7 +113,6 @@ class Monitor(QWidget):
         self.timer.timeout.connect(self.update_fps)
         self.timer.start()
         self.decoder=H264Decoder()
-        self.decoder.frame_decoded.connect(self.display_frame)
         self.latency=0
     
     def update_upload_speed(self,value:float):
@@ -133,10 +132,7 @@ class Monitor(QWidget):
                     break
                 self.decoder.write(data)
                 time.sleep(0.005)
-    
-    def handle_video(self,video:Video):
-        self.decoder.write(video.raw)
-        self.latency=int(time.time()*1000)%1000-video.timestamp
+  
     
     def update_fps(self):
         self.statusBar.update_fps(self.fps)
@@ -144,17 +140,11 @@ class Monitor(QWidget):
         self.statusBar.update_latency(self.latency)
     
     
-    def display_frame(self, image):
+    def setPixmap(self, pixmap:QPixmap):
         try:
             # Increment the frame count
             self.fps += 1
-            height, width, _ = image.shape
-            bytes_per_line = 3 * width
-            q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
-            # Convert QImage to QPixmap
-            self.__frame = QPixmap.fromImage(q_img)
-            
-            # Scale the pixmap to fit the QLabel's size
+            self.__frame=pixmap
             scaled_pixmap = self.__frame.scaled(self.display.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             self.display.setPixmap(scaled_pixmap)
         

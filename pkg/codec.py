@@ -8,7 +8,7 @@ from collections import deque
 import time
 import io
 from queue import Queue
-
+from PyQt5.QtGui import QImage, QPixmap
 
 class H264Stream:
     
@@ -111,11 +111,11 @@ class HighBuffer:
             self.write_latency+=time.time()-start_time
 
 class H264Decoder(QObject):
-    frame_decoded = pyqtSignal(np.ndarray)
+    frame_decoded = pyqtSignal()
     def __init__(self):
         super().__init__()
         self.stream=H264Stream()
-        
+        self.frames=Queue()
         self.decode_thread = threading.Thread(target=self.__decode_frames,daemon=True)
         self.has_data = False
         self.running = True
@@ -131,6 +131,8 @@ class H264Decoder(QObject):
             return
         self.stream.write(data)
 
+    def get_frame(self):
+        return self.frames.get()
     
     def __decode_frames(self):
         self.container = av.open(self.stream,format='h264')
@@ -138,18 +140,26 @@ class H264Decoder(QObject):
             print("start decode")
             
             for frame in self.container.decode(video=0):
-                self.frame_decoded.emit(frame.to_ndarray(format='rgb24'))
+                image=frame.to_ndarray(format='rgb24')
+                height, width, _ = image.shape
+                bytes_per_line = 3 * width
+                q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
+                # Convert QImage to QPixmap
+                pixmap = QPixmap.fromImage(q_img)
+                self.frames.put(pixmap)
+                self.frame_decoded.emit()
                 if not self.running:
                     print("decode thread exit")
                     return
  
         
 class H264Encoder(QObject):
-    frame_encoded = pyqtSignal(bytes)
+    frame_encoded = pyqtSignal()
     def __init__(self):
         super().__init__()
         self.buffer=H264Stream()
         self.running = True
+        
         self.encode_thread = threading.Thread(target=self.__encode_frames,daemon=True)
     def start(self):
         self.running = True
@@ -158,8 +168,13 @@ class H264Encoder(QObject):
         self.running = False
         self.buffer.close()
         self.encode_thread.join()
+        
     def write(self,data):
-        self.frame_encoded.emit(data)
+        self.buffer.write(data)
+        self.frame_encoded.emit()
+    
+    def read(self):
+        return self.buffer.readSingle()
     
     
     def __encode_frames(self):

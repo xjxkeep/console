@@ -3,7 +3,7 @@ import logging
 import ssl
 import struct
 from typing import Dict, Optional, cast
-from pkg.codec import H264Encoder
+from pkg.codec import H264Encoder,H264Decoder
 from aioquic.asyncio.client import connect
 from aioquic.asyncio.protocol import QuicConnectionProtocol
 from aioquic.quic.configuration import QuicConfiguration
@@ -32,7 +32,7 @@ class HighwayClientProtocol(QuicConnectionProtocol,QObject):
 
 class HighwayQuicClient(QObject):
     # TODO 流写入失败 重试
-    receive_video = pyqtSignal(Video)
+    receive_video = pyqtSignal()
     connected = pyqtSignal()  # 新增连接状态信号
     connection_error = pyqtSignal(str)  # 新增错误信号
     
@@ -55,6 +55,8 @@ class HighwayQuicClient(QObject):
         self.upload_bytes = 0
         self.download_bytes = 0
         self.source_device_id=source_device_id
+        self.decoder=H264Decoder()
+        self.decoder.frame_decoded.connect(self.receive_video.emit)
         self.control_stream_queue=Queue()
         # QUIC configuration
         self.configuration = QuicConfiguration(alpn_protocols=["HLD"], is_client=True)
@@ -222,7 +224,8 @@ class HighwayQuicClient(QObject):
         except Exception as e:
             self.control_stream_failed.emit(f"Send control message error: {str(e)}")
     
-    def send_video_test_data(self,data):
+    def send_video_test_data(self):
+        data=self.video_encoder.read()
         self.send_message(writer=self.video_writer,message=Video(raw=data,timestamp=int(time.time()*1000)%1000))
    
        
@@ -243,8 +246,8 @@ class HighwayQuicClient(QObject):
             while self.running:
                 message = await self.receive_message(reader)
                 video = Video.FromString(message)
+                self.decoder.write(video.raw)
                 
-                self.receive_video.emit(video)
         except asyncio.CancelledError:
             pass
         except Exception as e:

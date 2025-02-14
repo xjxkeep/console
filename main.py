@@ -1,4 +1,5 @@
 from PyQt5.QtGui import QCloseEvent
+from PyQt5.QtCore import QTimer
 from monitor import Monitor
 from controller import Controller
 from debug import Debug
@@ -47,15 +48,20 @@ class MainWindow(FluentWindow):
                                       insecure=self.setting.get("insecure",True),
                                       source_device_id=self.setting.get("source_device_id",1))
     
-        self.client.receive_video.connect(self.monitor.handle_video)
         self.client.upload_speed.connect(self.monitor.update_upload_speed)
         self.client.download_speed.connect(self.monitor.update_download_speed)
         self.client.connected.connect(self.quic_client_connected)
         self.client.connection_error.connect(self.quic_client_connection_error)
+        self.client.receive_video.connect(self.update_monitor)
         # controller 发送控制消息
         self.controller.controlMessage.connect(self.client.send_control_message)
         self.monitor.startSignal.connect(self.client.start)
+
         # self.client.start()
+    def update_monitor(self):
+        pixmap=self.client.decoder.get_frame()
+        self.monitor.setPixmap(pixmap)
+    
     def load_setting(self):
         if os.path.exists("setting.json"):
             with open("setting.json", "r") as f:
