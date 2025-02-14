@@ -54,12 +54,13 @@ class MainWindow(FluentWindow):
         self.client.connection_error.connect(self.quic_client_connection_error)
         # controller 发送控制消息
         self.controller.controlMessage.connect(self.client.send_control_message)
-        
+        self.monitor.startSignal.connect(self.client.start)
         # self.client.start()
     def load_setting(self):
         if os.path.exists("setting.json"):
             with open("setting.json", "r") as f:
                 self.setting = json.load(f)
+            print("load setting:",self.setting)
         else:
             self.setting = {
                 "host":"127.0.0.1",

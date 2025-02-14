@@ -3,7 +3,7 @@ import logging
 import ssl
 import struct
 from typing import Dict, Optional, cast
-
+from pkg.codec import H264Encoder
 from aioquic.asyncio.client import connect
 from aioquic.asyncio.protocol import QuicConnectionProtocol
 from aioquic.quic.configuration import QuicConfiguration
@@ -62,6 +62,9 @@ class HighwayQuicClient(QObject):
             self.configuration.verify_mode = ssl.CERT_NONE
         self.video_stream_failed.connect(self.reconnect_video_stream)
         self.control_stream_failed.connect(self.reconnect_control_stream)
+        
+        self.video_encoder=H264Encoder()
+        self.video_encoder.frame_encoded.connect(self.send_video_test_data)
     
     def reconnect_video_stream(self):
         print("reconnect video stream")
@@ -186,7 +189,8 @@ class HighwayQuicClient(QObject):
         self.send_message(writer=self.video_writer,message=register_msg)
 
         # Start message reading task
-        self.loop.create_task(self.send_test(writer=self.video_writer))
+        self.video_encoder.start()
+        # self.loop.create_task(self.send_test(writer=self.video_writer))
         self.loop.create_task(self._read_video_stream(reader=self.video_reader))
     
     def send_control_message(self, values: list):
@@ -217,10 +221,15 @@ class HighwayQuicClient(QObject):
                 self.send_message(writer=writer,message=message)
         except Exception as e:
             self.control_stream_failed.emit(f"Send control message error: {str(e)}")
-            
+    
+    def send_video_test_data(self,data):
+        self.send_message(writer=self.video_writer,message=Video(raw=data,timestamp=int(time.time()*1000)%1000))
+   
+       
+       
    
     async def send_test(self,writer:asyncio.StreamWriter):
-        with open(r"output2.h264","rb") as f:
+        with open(r"demo.h264","rb") as f:
             while self.running:
                 data=f.read(5000)
                 if data:

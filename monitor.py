@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt,pyqtSignal
 from qfluentwidgets import FluentIcon,FluentIconBase,TransparentPushButton,TransparentToolButton,TransparentDropDownPushButton,RoundMenu,Action
 from PyQt5.QtGui import QCloseEvent, QIcon,QColor,QImage,QPixmap
 from PyQt5.QtCore import Qt,QTimer
@@ -72,7 +72,7 @@ class StatusBar(QWidget):
 
 class Monitor(QWidget):
     # TODO 视频解码卡顿
-
+    startSignal=pyqtSignal()
     def setupUi(self):
         self.setObjectName("Monitor")
         self.resize(800,600)
@@ -88,9 +88,12 @@ class Monitor(QWidget):
         layout.addWidget(self.display)
         
         
-        self.testButton=QPushButton("测试视频解码")
+        self.testButton=QPushButton("测试本地视频解码")
         self.testButton.clicked.connect(self.test)
+        self.startButton=QPushButton("连接服务器")
+        self.startButton.clicked.connect(self.startSignal.emit)
         layout.addWidget(self.testButton)
+        layout.addWidget(self.startButton)
         
         
 
