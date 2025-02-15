@@ -40,13 +40,7 @@ class MainWindow(FluentWindow):
         super().__init__()
         self.load_setting()
         self.setupUi()
-        self.device=Device(id=1,message_type=Device.MessageType.VIDEO)
-        self.source_device_id=1
-        self.client=HighwayQuicClient(self.device,
-                                      host=self.setting.get("host","127.0.0.1"),
-                                      port=self.setting.get("port",30042),
-                                      insecure=self.setting.get("insecure",True),
-                                      source_device_id=self.setting.get("source_device_id",1))
+        self.client=HighwayQuicClient(self.setting)
     
         self.client.upload_speed.connect(self.monitor.update_upload_speed)
         self.client.download_speed.connect(self.monitor.update_download_speed)
@@ -74,7 +68,8 @@ class MainWindow(FluentWindow):
                 "port":30042,
                 "insecure":True,
                 "source_device_id":1,
-                "channel_count":10
+                "channel_count":10,
+                "device_id":1
             }
     
     def quic_client_connected(self):

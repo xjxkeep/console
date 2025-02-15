@@ -44,11 +44,13 @@ class HighwayQuicClient(QObject):
     video_stream_failed = pyqtSignal(str)
     control_stream_failed = pyqtSignal(str)
     
-    def __init__(self, device:Device, host:str, port:int, insecure:bool,source_device_id:int=1) -> None:
+    def __init__(self, setting) -> None:
         super().__init__()
-        self.device = device
-        self.host = host
-        self.port = port
+        self.setting=setting
+        
+        self.device_id=self.setting.get("device_id",1)
+        self.host = self.setting.get("host","127.0.0.1")
+        self.port = self.setting.get("port",30042)
         self.client = None
         self.reader = None
         self.writer = None
@@ -56,7 +58,7 @@ class HighwayQuicClient(QObject):
         self.running = False
         self.upload_bytes = 0
         self.download_bytes = 0
-        self.source_device_id=source_device_id
+        self.source_device_id=self.setting.get("source_device_id",1)
         self.decoder=H264Decoder()
         self.decoder.frame_decoded.connect(self.receive_video.emit)
         self.control_stream_queue=Queue()
@@ -64,7 +66,7 @@ class HighwayQuicClient(QObject):
         self.latency_count=0
         # QUIC configuration
         self.configuration = QuicConfiguration(alpn_protocols=["HLD"], is_client=True)
-        if insecure:
+        if self.setting.get("insecure",True):
             self.configuration.verify_mode = ssl.CERT_NONE
         self.video_stream_failed.connect(self.reconnect_video_stream)
         self.control_stream_failed.connect(self.reconnect_control_stream)
@@ -186,7 +188,7 @@ class HighwayQuicClient(QObject):
         # Register video stream
         register_msg = Register(
             device=Device(
-                id=self.device.id,
+                id=self.device_id,
                 message_type=Device.MessageType.VIDEO
             ),
             subscribe_device=Device(
@@ -216,7 +218,7 @@ class HighwayQuicClient(QObject):
         # Register control stream
         register_msg = Register(
             device=Device(
-                id=self.device.id,
+                id=self.device_id,
                 message_type=Device.MessageType.CONTROL
             )
         )
