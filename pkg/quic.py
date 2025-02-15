@@ -51,6 +51,7 @@ class HighwayQuicClient(QObject):
         self.device_id=self.setting.get("device_id",1)
         self.host = self.setting.get("host","127.0.0.1")
         self.port = self.setting.get("port",30042)
+        self.source_device_id=self.setting.get("source_device_id",1)
         self.client = None
         self.reader = None
         self.writer = None
@@ -58,7 +59,6 @@ class HighwayQuicClient(QObject):
         self.running = False
         self.upload_bytes = 0
         self.download_bytes = 0
-        self.source_device_id=self.setting.get("source_device_id",1)
         self.decoder=H264Decoder()
         self.decoder.frame_decoded.connect(self.receive_video.emit)
         self.control_stream_queue=Queue()

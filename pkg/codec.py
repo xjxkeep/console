@@ -198,6 +198,7 @@ class H264Encoder(QObject):
             stream.width = width
             stream.height = height
             stream.pix_fmt = 'yuv420p'
+            stream.gop_size=30
             # def read_frame():
             while True:
                 ret, frame = cap.read()
