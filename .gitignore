@@ -9,3 +9,6 @@ __pycache__
 .history/
 .DS_Store
 setting.json
+dist/
+build/
+*.spec

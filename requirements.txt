@@ -1,5 +1,6 @@
 pygame
 aioquic
-ffmpeg-python
+pyav
 PyQt-Fluent-Widgets[full]
 protobuf
+uuid
