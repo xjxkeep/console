@@ -136,22 +136,24 @@ class H264Decoder(QObject):
     
     def __decode_frames(self):
         self.container = av.open(self.stream,format='h264')
+        print("start decode")
         while self.running:
-            print("start decode")
-            
-            for frame in self.container.decode(video=0):
-                image=frame.to_ndarray(format='rgb24')
-                height, width, _ = image.shape
-                bytes_per_line = 3 * width
-                q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
-                # Convert QImage to QPixmap
-                pixmap = QPixmap.fromImage(q_img)
-                self.frames.put(pixmap)
-                self.frame_decoded.emit()
-                if not self.running:
-                    print("decode thread exit")
-                    return
- 
+            try:
+                for frame in self.container.decode(video=0):
+                    image=frame.to_ndarray(format='rgb24')
+                    height, width, _ = image.shape
+                    bytes_per_line = 3 * width
+                    q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
+                    # Convert QImage to QPixmap
+                    pixmap = QPixmap.fromImage(q_img)
+                    self.frames.put(pixmap)
+                    self.frame_decoded.emit()
+                    if not self.running:
+                        print("decode thread exit")
+                        return
+            except Exception as e:
+                pass
+    
         
 class H264Encoder(QObject):
     frame_encoded = pyqtSignal()

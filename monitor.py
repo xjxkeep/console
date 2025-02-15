@@ -73,6 +73,8 @@ class StatusBar(QWidget):
 class Monitor(QWidget):
     # TODO 视频解码卡顿
     startSignal=pyqtSignal()
+    sendTestVideoSignal=pyqtSignal()
+
     def setupUi(self):
         self.setObjectName("Monitor")
         self.resize(800,600)
@@ -92,8 +94,11 @@ class Monitor(QWidget):
         self.testButton.clicked.connect(self.test)
         self.startButton=QPushButton("连接服务器")
         self.startButton.clicked.connect(self.startSignal.emit)
+        self.sendTestVideoButton=QPushButton("发送摄像头视频")
+        self.sendTestVideoButton.clicked.connect(self.sendTestVideoSignal.emit)
         layout.addWidget(self.testButton)
         layout.addWidget(self.startButton)
+        layout.addWidget(self.sendTestVideoButton)
         
         
 

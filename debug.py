@@ -69,8 +69,8 @@ class Debug(ScrollArea):
         self.settingItemMap=dict()
         for key,value in self.setting.items():
             item=SettingItem(key,value)
-            item.settingChanged.connect(self.settingChanged.emit)
             self.setting_list.append(item)
+            item.settingChanged.connect(self.updateSetting)
             self.settingItemMap[key]=item
             layout.addWidget(item)
         
@@ -78,7 +78,12 @@ class Debug(ScrollArea):
         self.saveButton.clicked.connect(self.saveSetting)
         layout.addWidget(self.saveButton)
         self.widget().setLayout(layout)
-        
+    
+    def updateSetting(self,setting:dict):
+        for key,value in setting.items():
+            self.setting[key]=value
+        self.settingChanged.emit(setting)
+
     def getSetting(self,key=None):
         if key is None:
             return {k:self.getValue(k) for k in self.settingItemMap.keys()}

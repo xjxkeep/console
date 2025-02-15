@@ -51,7 +51,7 @@ class MainWindow(FluentWindow):
         # controller 发送控制消息
         self.controller.controlMessage.connect(self.client.send_control_message)
         self.monitor.startSignal.connect(self.client.start)
-
+        self.monitor.sendTestVideoSignal.connect(self.client.send_video_test)
         # self.client.start()
     def update_monitor(self):
         pixmap=self.client.decoder.get_frame()

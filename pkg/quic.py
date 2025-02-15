@@ -47,11 +47,6 @@ class HighwayQuicClient(QObject):
     def __init__(self, setting) -> None:
         super().__init__()
         self.setting=setting
-        
-        self.device_id=self.setting.get("device_id",1)
-        self.host = self.setting.get("host","127.0.0.1")
-        self.port = self.setting.get("port",30042)
-        self.source_device_id=self.setting.get("source_device_id",1)
         self.client = None
         self.reader = None
         self.writer = None
@@ -160,8 +155,8 @@ class HighwayQuicClient(QObject):
         try:
             print("connect quic client")
             async with connect(
-                self.host,
-                self.port,
+                self.setting.get("host","127.0.0.1"),
+                self.setting.get("port",30042),
                 configuration=self.configuration,
                 create_protocol=HighwayClientProtocol,
             ) as client:
@@ -188,11 +183,11 @@ class HighwayQuicClient(QObject):
         # Register video stream
         register_msg = Register(
             device=Device(
-                id=self.device_id,
+                id=self.setting.get("device_id",1),
                 message_type=Device.MessageType.VIDEO
             ),
             subscribe_device=Device(
-                id=self.source_device_id,
+                id=self.setting.get("source_device_id",1),
                 message_type=Device.MessageType.VIDEO
             )
         )
@@ -200,10 +195,14 @@ class HighwayQuicClient(QObject):
         await self.send_message(writer=self.video_writer,message=register_msg)
 
         # Start message reading task
-        self.video_encoder.start()
+        # self.video_encoder.start()
         # self.loop.create_task(self.send_test(writer=self.video_writer))
         self.loop.create_task(self._read_video_stream(reader=self.video_reader))
     
+    def send_video_test(self):
+        self.video_encoder.start()
+
+
     def send_control_message(self, values: list):
         # TODO 发送速率小于生产速率会产生堆积 导致延迟
         if self.loop and self.running:
@@ -218,7 +217,7 @@ class HighwayQuicClient(QObject):
         # Register control stream
         register_msg = Register(
             device=Device(
-                id=self.device_id,
+                id=self.setting.get("device_id",1),
                 message_type=Device.MessageType.CONTROL
             )
         )
