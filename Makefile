@@ -4,4 +4,14 @@ gen-proto:
 	@echo "done"
 
 build:
-	pyinstaller -n console_inone .\main.py --hidden-import uuid --onefile 
+	pyinstaller -n console main.py --hidden-import uuid
+
+clean:
+	rm -rf build
+	rm -rf dist
+	rm -rf *.spec
+	rm -rf *.spec.py
+	rm -rf *.spec.pyc
+	rm -rf *.spec.pyo
+
+rebuild: clean build

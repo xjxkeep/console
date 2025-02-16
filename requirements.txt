@@ -1,6 +1,8 @@
 pygame
 aioquic
 pyav
-PyQt-Fluent-Widgets[full]
+PyQt-Fluent-Widgets
 protobuf
 uuid
+pyinstaller
+opencv-python
