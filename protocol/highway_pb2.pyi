@@ -20,9 +20,11 @@ class Device(_message.Message):
         VIDEO: _ClassVar[Device.MessageType]
         CONTROL: _ClassVar[Device.MessageType]
         REPORT: _ClassVar[Device.MessageType]
+        FILE: _ClassVar[Device.MessageType]
     VIDEO: Device.MessageType
     CONTROL: Device.MessageType
     REPORT: Device.MessageType
+    FILE: Device.MessageType
     DEVICE_TYPE_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_TYPE_FIELD_NUMBER: _ClassVar[int]
     ID_FIELD_NUMBER: _ClassVar[int]

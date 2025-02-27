@@ -188,6 +188,7 @@ class HighwayQuicClient(QObject):
                 message_type=Device.MessageType.FILE
             )
         )
+        print("send file register message")
         await self.send_message(writer=self.file_writer,message=register_msg)
     
     def send_file(self,filePath):
@@ -224,7 +225,7 @@ class HighwayQuicClient(QObject):
                 message_type=Device.MessageType.VIDEO
             )
         )
-        print("send register message")
+        print("send video register message")
         await self.send_message(writer=self.video_writer,message=register_msg)
 
         # Start message reading task
@@ -254,6 +255,7 @@ class HighwayQuicClient(QObject):
                 message_type=Device.MessageType.CONTROL
             )
         )
+        print("send control register message")
         await self.send_message(writer=self.control_writer,message=register_msg)
         self.loop.create_task(self.__send_control_message(writer=self.control_writer))
     
