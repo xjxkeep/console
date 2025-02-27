@@ -1,6 +1,59 @@
 from PyQt5.QtWidgets import *
 from qfluentwidgets import *
 from PyQt5.QtCore import Qt
+import os
+import threading
+class Uploader(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setupUi()
+        self.filePath=None
+        self.fileSize=0
+        self.writer=None
+    
+    def setupUi(self):
+        self.setLayout(QVBoxLayout())
+        self.progressBar=QProgressBar()
+        self.progressBar.setRange(0,100)
+        self.progressBar.setValue(0)
+        layout=QHBoxLayout()
+        self.openFileButton=PushButton("Open File")
+        self.openFileButton.clicked.connect(self.openFile)
+        self.uploadButton=PushButton("Upload")
+        self.uploadButton.clicked.connect(self.upload)
+        layout.addWidget(self.openFileButton)
+        layout.addWidget(self.uploadButton)
+
+        self.fileLabel=QLabel()
+        self.fileLabel.setText("No file selected")
+        self.layout().addWidget(self.fileLabel)
+        self.layout().addLayout(layout)
+        self.layout().addWidget(self.progressBar)
+        
+    def openFile(self):
+        file,ok=QFileDialog.getOpenFileName(self,"Open File","","All Files (*)")
+        if ok:
+            self.progressBar.setValue(0)
+            self.filePath=file
+            self.fileSize=os.stat(file).st_size
+            self.progressBar.setMaximum(self.fileSize)
+            self.fileLabel.setText(file)
+    
+    def __upload_task(self):
+        self.progressBar.setValue(0)
+        with open(self.filePath, "rb") as f:
+            while True:
+                data=f.read(1024)
+                if len(data)==0:
+                    break
+                if self.writer is not None:
+                    self.writer.write(data)
+                    
+                self.progressBar.setValue(self.progressBar.value()+len(data))
+
+
+    def upload(self):
+        threading.Thread(target=self.__upload_task).start()
 
 class SettingItem(QWidget):
     settingChanged=pyqtSignal(dict)
@@ -65,6 +118,8 @@ class Debug(ScrollArea):
         self.setWidget(QWidget())
         
         layout=QVBoxLayout()
+        self.uploader=Uploader()
+        layout.addWidget(self.uploader)
         self.setting_list=[]
         self.settingItemMap=dict()
         for key,value in self.setting.items():
