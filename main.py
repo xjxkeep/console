@@ -48,10 +48,15 @@ class MainWindow(FluentWindow):
         self.client.connection_error.connect(self.quic_client_connection_error)
         self.client.receive_video.connect(self.update_monitor)
         self.client.latency.connect(self.monitor.update_latency)
+        
         # controller 发送控制消息
         self.controller.controlMessage.connect(self.client.send_control_message)
         self.monitor.startSignal.connect(self.client.start)
         self.monitor.sendTestVideoSignal.connect(self.client.send_video_test)
+
+        # debug 发送文件 更新进度
+        self.debug.uploader.fileToSend.connect(self.client.send_file)
+        self.client.file_send_progress.connect(self.debug.uploader.updateProgress)
         # self.client.start()
     def update_monitor(self):
         pixmap=self.client.decoder.get_frame()

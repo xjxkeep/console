@@ -11,11 +11,11 @@ from aioquic.quic.events import QuicEvent, StreamDataReceived,ConnectionTerminat
 from aioquic.quic.logger import QuicFileLogger
 from PyQt5.QtCore import QObject,pyqtSignal
 from google.protobuf.message import Message
-from protocol.highway_pb2 import Register,Device,Control,Video
+from protocol.highway_pb2 import Register,Device,Control,Video,File
 import time
 import threading
 from asyncio import Queue
-
+import os
 logger = logging.getLogger("client")
 
 
@@ -39,7 +39,7 @@ class HighwayQuicClient(QObject):
     upload_speed = pyqtSignal(float)
     download_speed = pyqtSignal(float)
     latency = pyqtSignal(int)
-    
+    file_send_progress = pyqtSignal(str,int)
     
     video_stream_failed = pyqtSignal(str)
     control_stream_failed = pyqtSignal(str)
@@ -167,6 +167,7 @@ class HighwayQuicClient(QObject):
                 self.loop.create_task(self.metric_collect())
                 self.loop.create_task(self.establish_video_stream())
                 self.loop.create_task(self.establish_control_stream())
+                self.loop.create_task(self.etablish_file_stream())
                  # Keep connection alive
                 while self.running:
                     # Check if client is still connected
@@ -174,7 +175,39 @@ class HighwayQuicClient(QObject):
         except Exception as e:
             print("connect error:",e)
             self.connection_error.emit(str(e))
-            
+    
+    async def etablish_file_stream(self):
+        self.file_reader,self.file_writer=await self.client.create_stream(False)
+        register_msg = Register(
+            device=Device(
+                id=self.setting.get("device_id",1),
+                message_type=Device.MessageType.FILE
+            ),
+            subscribe_device=Device(
+                id=self.setting.get("source_device_id",1),
+                message_type=Device.MessageType.FILE
+            )
+        )
+        await self.send_message(writer=self.file_writer,message=register_msg)
+    
+    def send_file(self,filePath):
+        if self.loop and self.running and self.file_writer:
+            self.loop.create_task(self.__send_file(filePath))
+
+    async def __send_file(self,filePath):
+        with open(filePath, "rb") as f:
+            fileName=os.path.basename(filePath)
+            fileSize=os.stat(filePath).st_size
+            await self.send_message(writer=self.file_writer,message=File(name=fileName,size=fileSize))
+            sendSize=0
+            while True:
+                data=f.read(1024)
+                if len(data)==0:
+                    break
+                self.file_writer.write(data)
+                await self.file_writer.drain()
+                sendSize+=len(data)
+                self.file_send_progress.emit(fileName,round(sendSize*100/fileSize))
 
     async def establish_video_stream(self):
         """Establish video stream after connection"""

@@ -3,13 +3,13 @@ from qfluentwidgets import *
 from PyQt5.QtCore import Qt
 import os
 import threading
+from PyQt5.QtCore import pyqtSignal
 class Uploader(QWidget):
+    fileToSend=pyqtSignal(str)
     def __init__(self):
         super().__init__()
         self.setupUi()
         self.filePath=None
-        self.fileSize=0
-        self.writer=None
     
     def setupUi(self):
         self.setLayout(QVBoxLayout())
@@ -35,25 +35,14 @@ class Uploader(QWidget):
         if ok:
             self.progressBar.setValue(0)
             self.filePath=file
-            self.fileSize=os.stat(file).st_size
-            self.progressBar.setMaximum(self.fileSize)
             self.fileLabel.setText(file)
     
-    def __upload_task(self):
-        self.progressBar.setValue(0)
-        with open(self.filePath, "rb") as f:
-            while True:
-                data=f.read(1024)
-                if len(data)==0:
-                    break
-                if self.writer is not None:
-                    self.writer.write(data)
-                    
-                self.progressBar.setValue(self.progressBar.value()+len(data))
-
-
     def upload(self):
-        threading.Thread(target=self.__upload_task).start()
+        self.fileToSend.emit(self.filePath)
+
+    def updateProgress(self,fileName,progress):
+        self.progressBar.setValue(progress)
+        self.progressBar.setFormat(f"{fileName} - {progress}%")
 
 class SettingItem(QWidget):
     settingChanged=pyqtSignal(dict)
