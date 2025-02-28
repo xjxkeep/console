@@ -171,7 +171,8 @@ class HighwayQuicClient(QObject):
                  # Keep connection alive
                 while self.running:
                     # Check if client is still connected
-                    await asyncio.sleep(1)
+                    await client.ping()
+                    await asyncio.sleep(5)
         except Exception as e:
             print("connect error:",e)
             self.connection_error.emit(str(e))
