@@ -16,7 +16,7 @@ import time
 import threading
 from asyncio import Queue
 import os
-logger = logging.getLogger("client")
+
 
 
 class HighwayClientProtocol(QuicConnectionProtocol,QObject):
@@ -56,6 +56,7 @@ class HighwayQuicClient(QObject):
         self.download_bytes = 0
         self.decoder=H264Decoder()
         self.decoder.frame_decoded.connect(self.receive_video.emit)
+        
         self.control_stream_queue=Queue()
         self.latency_sum=0
         self.latency_count=0
@@ -78,18 +79,71 @@ class HighwayQuicClient(QObject):
         self.loop.create_task(self.establish_control_stream())
 
     async def send_message(self,writer:asyncio.StreamWriter,message:Message):
-        message = message.SerializeToString()
-        message = struct.pack("<L", len(message)) + message
-        self.upload_bytes += len(message)
-        writer.write(message)
+         # 序列化消息
+        data = message.SerializeToString()
+        
+        # 构建header
+        length = len(data)
+        crc = calculate_crc_fast(length)
+        header = bytes([
+            0xff,
+            crc,
+            length & 0xFF,
+            (length >> 8) & 0xFF
+        ])
+        
+        # 发送header和数据
+        writer.write(header + data)
+        print("send header:",header ,length)
         await writer.drain()
-
+        self.upload_bytes+=len(header+data)
+        
     async def receive_message(self,reader:asyncio.StreamReader):
-        length = await reader.readexactly(4)
-        length = struct.unpack("<L",length)[0]
-        message = await reader.readexactly(length)
-        self.download_bytes += len(message)
-        return message
+         # 创建4字节的header缓冲区
+        header = bytearray(4)
+        remain_size=3
+        # 读取直到找到0xff起始位
+        while True:
+            b = await reader.readexactly(1)
+            self.download_bytes+=1
+            if b[0] == 0xff:
+                header[0] = b[0]
+                # 读取剩余3个字节
+                remain_size=3
+                while True:
+                    remaining = await reader.readexactly(remain_size)
+                    header[4-remain_size:] = remaining
+                    self.download_bytes+=remain_size
+                    print("receive header:",header.hex())
+                    
+                    # 获取长度并验证CRC
+                    length = (header[2]&0xff | (header[3]&0xff)<<8)
+                    check_crc = calculate_crc_fast(length)
+                    
+                    # CRC匹配则退出循环
+                    if check_crc == header[1]:
+                        print("crc match ",length)
+                        # 读取消息体
+                        data = await reader.readexactly(length)
+                        self.download_bytes+=length
+                        return data
+                    # [ff,a,ff,b]
+                    # [ff,b]   i=2  
+                    has_ff=False
+                    for i in range(1, 4):
+                        if header[i] == 0xff:
+                            has_ff=True
+                            # 移动数据
+                            for j in range(0, 4-i):
+                                header[j] = header[j+i]
+                            remain_size=i
+                            break
+                    if not has_ff:
+                        break
+                        
+                
+
+        
 
     def start(self):
         """Start the client in a new thread"""
@@ -242,7 +296,7 @@ class HighwayQuicClient(QObject):
         # TODO 发送速率小于生产速率会产生堆积 导致延迟
         if self.loop and self.running:
             future = asyncio.run_coroutine_threadsafe(
-                self.control_stream_queue.put(Control(values=values)), 
+                self.control_stream_queue.put(Control(channels=values)), 
                 self.loop
             )
             future.result()  # 等待操作完成
@@ -299,6 +353,7 @@ class HighwayQuicClient(QObject):
         try:
             while self.running:
                 message = await self.receive_message(reader)
+                print("receive message",len(message))
                 video = Video.FromString(message)
                 self.decoder.write(video.raw)
                 self.latency_sum+=int(time.time()*1000)%10000-video.timestamp
@@ -306,7 +361,34 @@ class HighwayQuicClient(QObject):
         except asyncio.CancelledError:
             pass
         except Exception as e:
+            print("read video stream error",e)
             self.video_stream_failed.emit(f"Read error: {str(e)}")
+
+
+
+def generate_crc8_table():
+    crc8_table = [0] * 256
+    for i in range(256):
+        crc = i
+        for j in range(8):
+            if crc & 0x80:
+                crc = ((crc << 1) & 0xFF) ^ 0x07
+            else:
+                crc = (crc << 1) & 0xFF
+        crc8_table[i] = crc
+    return crc8_table
+
+def calculate_crc_fast(data: int) -> int:
+    crc = 0
+    # 获取低字节和高字节
+    low_byte = data & 0xFF
+    high_byte = (data >> 8) & 0xFF
+    
+    # 使用查表法计算CRC8
+    crc = CRC8_TABLE[crc ^ low_byte]
+    crc = CRC8_TABLE[crc ^ high_byte]
+    
+    return crc
 
 
         
@@ -315,3 +397,6 @@ class HighwayQuicClient(QObject):
 
 
 
+logger = logging.getLogger("quic")
+# 生成全局查找表
+CRC8_TABLE = generate_crc8_table()
