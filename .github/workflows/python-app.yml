@@ -12,20 +12,34 @@ on:
 permissions:
   contents: read
 
+
+
+
 jobs:
   build:
-
-    runs-on: ubuntu-latest
-
+    runs-on: windows-latest  # 指定运行环境为Windows
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Package Application
-      uses: JackMcKew/pyinstaller-action-windows@main
-      with:
-        path: .
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'  # 指定Python版本
 
-    - uses: actions/upload-artifact@v4
-      with:
-        name: name-of-artifact
-        path: src/dist/windows
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt  
+          pip install pyinstaller
+
+      - name: Package Application with PyInstaller
+        run: |
+          pyinstaller -n console main.py --hidden-import uuid  # 替换为你的Python脚本文件
+          # 或者使用.spec文件
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-exe
+          path: dist/console  # 替换为生成的可执行文件路径
