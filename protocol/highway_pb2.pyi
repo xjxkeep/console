@@ -2,7 +2,8 @@ from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -57,12 +58,14 @@ class Report(_message.Message):
     def __init__(self, battery: _Optional[float] = ...) -> None: ...
 
 class Video(_message.Message):
-    __slots__ = ("raw", "timestamp")
+    __slots__ = ("raw", "timestamp", "counter")
     RAW_FIELD_NUMBER: _ClassVar[int]
     TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
+    COUNTER_FIELD_NUMBER: _ClassVar[int]
     raw: bytes
     timestamp: int
-    def __init__(self, raw: _Optional[bytes] = ..., timestamp: _Optional[int] = ...) -> None: ...
+    counter: int
+    def __init__(self, raw: _Optional[bytes] = ..., timestamp: _Optional[int] = ..., counter: _Optional[int] = ...) -> None: ...
 
 class File(_message.Message):
     __slots__ = ("name", "offset", "total_size", "data", "checksum", "block_id", "last_block")

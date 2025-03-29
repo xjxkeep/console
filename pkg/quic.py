@@ -353,8 +353,8 @@ class HighwayQuicClient(QObject):
         try:
             while self.running:
                 message = await self.receive_message(reader)
-                print("receive message",len(message))
                 video = Video.FromString(message)
+                print("receive message",len(message),"video count:",video.counter)
                 self.decoder.write(video.raw)
                 self.latency_sum+=int(time.time()*1000)-video.timestamp
                 self.latency_count+=1
