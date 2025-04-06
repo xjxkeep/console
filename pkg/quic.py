@@ -70,6 +70,8 @@ class HighwayQuicClient(QObject):
         self.video_encoder=H264Encoder()
         self.video_encoder.frame_encoded.connect(self.send_video_test_data)
     
+    def change_video_format(self,format):
+        self.decoder.change_format(format)
 
     def reconnect_video_stream(self):
         print("reconnect video stream")

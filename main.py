@@ -53,7 +53,7 @@ class MainWindow(FluentWindow):
         self.controller.controlMessage.connect(self.client.send_control_message)
         self.monitor.startSignal.connect(self.client.start)
         self.monitor.sendTestVideoSignal.connect(self.client.send_video_test)
-
+        self.monitor.video_format_changed.connect(self.client.change_video_format)
         # debug 发送文件 更新进度
         self.debug.uploader.fileToSend.connect(self.client.send_file)
         self.client.file_send_progress.connect(self.debug.uploader.updateProgress)

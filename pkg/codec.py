@@ -112,13 +112,15 @@ class HighBuffer:
 
 class H264Decoder(QObject):
     frame_decoded = pyqtSignal()
-    def __init__(self):
+    def __init__(self,format='h264'):
         super().__init__()
         self.stream=H264Stream()
         self.frames=Queue()
+        self.lock=threading.Lock()
         self.decode_thread = threading.Thread(target=self.__decode_frames,daemon=True)
         self.has_data = False
         self.running = True
+        self.format=format
         self.decode_thread.start()
 
     def close(self):
@@ -134,23 +136,31 @@ class H264Decoder(QObject):
     def get_frame(self):
         return self.frames.get()
     
+    def change_format(self,format):
+        with self.lock:
+            self.format=format
+            self.container.close()
+            self.container = av.open(self.stream,format=self.format)
+        
+
     def __decode_frames(self):
-        self.container = av.open(self.stream,format='h264')
+        self.container = av.open(self.stream,format=self.format)
         print("start decode")
         while self.running:
             try:
-                for frame in self.container.decode(video=0):
-                    image=frame.to_ndarray(format='rgb24')
-                    height, width, _ = image.shape
-                    bytes_per_line = 3 * width
-                    q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
-                    # Convert QImage to QPixmap
-                    pixmap = QPixmap.fromImage(q_img)
-                    self.frames.put(pixmap)
-                    self.frame_decoded.emit()
-                    if not self.running:
-                        print("decode thread exit")
-                        return
+                with self.lock:
+                    for frame in self.container.decode(video=0):
+                        image=frame.to_ndarray(format='rgb24')
+                        height, width, _ = image.shape
+                        bytes_per_line = 3 * width
+                        q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
+                        # Convert QImage to QPixmap
+                        pixmap = QPixmap.fromImage(q_img)
+                        self.frames.put(pixmap)
+                        self.frame_decoded.emit()
+                        if not self.running:
+                            print("decode thread exit")
+                            return
             except Exception as e:
                 pass
     

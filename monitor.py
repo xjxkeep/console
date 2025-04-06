@@ -10,6 +10,7 @@ from pkg.codec import H264Decoder
 import time
 import threading
 class StatusBar(QWidget):
+    video_format_changed=pyqtSignal(str)
     def update(self):
         self.date.setText(datetime.now().strftime("%Y/%m/%d %H:%M:%S"))
     
@@ -34,6 +35,7 @@ class StatusBar(QWidget):
         self.fps=TransparentPushButton(FluentIcon.VIDEO.icon(),"30 fps")
         self.date=TransparentPushButton(FluentIcon.DATE_TIME.icon(),"2025/02/09 21:44:00")
         self.channel=TransparentDropDownPushButton(FluentIcon.IOT.icon(),"线路: 上海")
+        self.video_format=TransparentDropDownPushButton(FluentIcon.VIDEO.icon(),"视频格式: h264")
         self.battery=TransparentPushButton(QIcon("assets/svg/battery-full.svg"),"100%")
         menu = RoundMenu(parent=self)
         menu.addActions([
@@ -41,6 +43,16 @@ class StatusBar(QWidget):
             Action('线路: 北京'),
         ])
         self.channel.setMenu(menu)
+        menu.triggered.connect(self.__handle_menu_triggered)
+
+
+        menu=RoundMenu(parent=self)
+        menu.addActions([
+            Action('h264'),
+            Action('h265'),
+        ])
+        self.video_format.setMenu(menu)
+        menu.triggered.connect(self.__handle_video_format_menu_triggered)
 
         self.timer=QTimer(self)
         self.timer.setInterval(1000)
@@ -54,6 +66,8 @@ class StatusBar(QWidget):
 
         layout.addWidget(self.upload)
         layout.addWidget(self.download)
+
+        layout.addWidget(self.video_format)
         layout.addWidget(self.channel)
         layout.addWidget(self.fps)
         layout.addWidget(self.date)
@@ -64,7 +78,14 @@ class StatusBar(QWidget):
         self.setFixedHeight(50)
         self.setStyleSheet("background-color: rgb(255,0,0)")
 
+    def __handle_menu_triggered(self,action:Action):
+        print(action.text())
     
+
+    def __handle_video_format_menu_triggered(self,action:Action):
+        print(action.text())
+        self.video_format_changed.emit(action.text())
+        self.video_format.setText("视频格式: "+action.text())
     def __init__(self):
         super().__init__()
         self.setupUi()
@@ -74,7 +95,7 @@ class Monitor(QWidget):
     # TODO 视频解码卡顿
     startSignal=pyqtSignal()
     sendTestVideoSignal=pyqtSignal()
-
+    video_format_changed=pyqtSignal(str)
     def setupUi(self):
         self.setObjectName("Monitor")
         self.resize(800,600)
@@ -119,6 +140,7 @@ class Monitor(QWidget):
         self.timer.start()
         self.decoder=H264Decoder()
         self.latency=0
+        self.statusBar.video_format_changed.connect(self.video_format_changed.emit)
     
     def update_upload_speed(self,value:float):
         self.statusBar.update_upload_speed(value)
