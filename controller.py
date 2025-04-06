@@ -131,6 +131,10 @@ class Controller(ScrollArea):
             channel.setFineTune(self.setting.get(f"Channel{idx+1}",0))
             layout.addWidget(channel)
         self.widget().setLayout(layout)
+        self.timer=QTimer(self)
+        self.timer.setInterval(500)
+        self.timer.timeout.connect(self.__emit_control_message)
+        self.timer.start()
         
     def __init__(self,setting:dict) -> None:
         super().__init__()
@@ -141,13 +145,18 @@ class Controller(ScrollArea):
 
     def getChannelValues(self):
         return [channel.getValue() for channel in self.channels]
+
+
+    def __emit_control_message(self):
+        channelValues=self.getChannelValues()
+        self.controlMessage.emit(channelValues)
     # 更新通道值 
     def setChannelValue(self,values:list):
         for idx,value in enumerate(values):
             if idx>=self.channelCount:
                 break
             self.channels[idx].setValue(value)
-        self.controlMessage.emit(self.getChannelValues())
+        self.__emit_control_message()
     
     def closeEvent(self, a0) -> None:
         print("controller closeEvent")

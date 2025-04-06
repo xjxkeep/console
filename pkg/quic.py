@@ -70,6 +70,7 @@ class HighwayQuicClient(QObject):
         self.video_encoder=H264Encoder()
         self.video_encoder.frame_encoded.connect(self.send_video_test_data)
     
+
     def reconnect_video_stream(self):
         print("reconnect video stream")
         self.loop.create_task(self.establish_video_stream())
@@ -295,6 +296,7 @@ class HighwayQuicClient(QObject):
     def send_control_message(self, values: list):
         # TODO 发送速率小于生产速率会产生堆积 导致延迟
         if self.loop and self.running:
+            print("send control message:",values)
             future = asyncio.run_coroutine_threadsafe(
                 self.control_stream_queue.put(Control(channels=values)), 
                 self.loop
@@ -318,6 +320,7 @@ class HighwayQuicClient(QObject):
         try:
             while self.running:
                 message=await self.control_stream_queue.get()
+                print("send control message channels:",message.channels )
                 await self.send_message(writer=writer,message=message)
         except Exception as e:
             self.control_stream_failed.emit(f"Send control message error: {str(e)}")
