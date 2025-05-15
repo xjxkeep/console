@@ -4,6 +4,7 @@ from monitor import Monitor
 from controller import Controller
 from debug import Debug
 from about import About
+from setting import SettingView
 import sys
 from PyQt5.QtWidgets import QApplication
 from qfluentwidgets import FluentWindow,FluentIcon,NavigationItemPosition
@@ -27,9 +28,12 @@ class MainWindow(FluentWindow):
         self.controller=Controller(self.setting)
         self.debug=Debug(self.setting)
         self.about=About()
+        self.settingView=SettingView()
+        
 
         self.addSubInterface(self.monitor,FluentIcon.MOVIE, "Monitor")
         self.addSubInterface(self.controller,FluentIcon.GAME, "Controller")
+        self.addSubInterface(self.settingView,FluentIcon.SETTING,"Setting")
         self.addSubInterface(self.debug,FluentIcon.DEVELOPER_TOOLS, "Debug")
         self.addSubInterface(self.about,FluentIcon.FEEDBACK,"About")
         

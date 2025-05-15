@@ -6,3 +6,4 @@ protobuf
 uuid
 pyinstaller
 opencv-python
+qrcode
