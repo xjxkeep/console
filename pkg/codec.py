@@ -10,7 +10,7 @@ import io
 from queue import Queue
 from PyQt5.QtGui import QImage, QPixmap
 
-class H264Stream:
+class BufferStream:
     
     def __init__(self):
         self.buffer = deque()
@@ -114,7 +114,7 @@ class H264Decoder(QObject):
     frame_decoded = pyqtSignal()
     def __init__(self,format='h264'):
         super().__init__()
-        self.stream=H264Stream()
+        self.stream=BufferStream()
         self.frames=Queue()
         self.lock=threading.Lock()
         self.decode_thread = threading.Thread(target=self.__decode_frames,daemon=True)
@@ -125,7 +125,7 @@ class H264Decoder(QObject):
 
     def close(self):
         self.running = False
-        self.stream.close()
+        
         self.decode_thread.join()
 
     def write(self, data):
@@ -141,6 +141,7 @@ class H264Decoder(QObject):
             self.format=format
             self.container.close()
             self.container = av.open(self.stream,format=self.format)
+            
         
 
     def __decode_frames(self):
@@ -163,13 +164,14 @@ class H264Decoder(QObject):
                             return
             except Exception as e:
                 pass
-    
+        self.stream.close()
+        self.container.close()
         
 class H264Encoder(QObject):
     frame_encoded = pyqtSignal()
     def __init__(self):
         super().__init__()
-        self.buffer=H264Stream()
+        self.buffer=BufferStream()
         self.running = True
         
         self.encode_thread = threading.Thread(target=self.__encode_frames,daemon=True)
@@ -185,7 +187,7 @@ class H264Encoder(QObject):
         self.buffer.write(data)
         self.frame_encoded.emit()
     
-    def read(self):
+    def read_frame(self):
         return self.buffer.readSingle()
     
     
@@ -212,7 +214,7 @@ class H264Encoder(QObject):
             stream.pix_fmt = 'yuv420p'
             stream.gop_size=30
             # def read_frame():
-            while True:
+            while self.running:
                 ret, frame = cap.read()
                 if not ret:
                     print("无法读取视频帧")
@@ -292,7 +294,7 @@ def test_encode_decode():
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = int(cap.get(cv2.CAP_PROP_FPS))
-    buffer=H264Stream()
+    buffer=BufferStream()
     # 创建输出容器
     output_container = av.open(buffer, 'w',format='h264')
     stream = output_container.add_stream('h264', rate=fps)
@@ -400,7 +402,7 @@ if __name__ == "__main__":
                     if cv2.waitKey(1000//30) & 0xFF == ord('q'):
                         break
 
-        stream=H264Stream()
+        stream=BufferStream()
         
         def write_stream():
             with open(r'C:\Users\xjx201\Desktop\console\pkg\output.h264', 'rb') as f:
