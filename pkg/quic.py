@@ -2,7 +2,7 @@ import asyncio
 import logging
 import ssl
 import struct
-from typing import Dict, Optional, cast
+from typing import Dict, Optional, cast, List
 from pkg.codec import H264Encoder,H264Decoder
 from aioquic.asyncio.client import connect
 from aioquic.asyncio.protocol import QuicConnectionProtocol
@@ -17,6 +17,35 @@ import threading
 from asyncio import Queue
 import os
 
+
+def generate_crc8_table():
+    crc8_table = [0] * 256
+    for i in range(256):
+        crc = i
+        for j in range(8):
+            if crc & 0x80:
+                crc = ((crc << 1) & 0xFF) ^ 0x07
+            else:
+                crc = (crc << 1) & 0xFF
+        crc8_table[i] = crc
+    return crc8_table
+
+def calculate_crc_fast(data: int) -> int:
+    crc = 0
+    # 获取低字节和高字节
+    low_byte = data & 0xFF
+    high_byte = (data >> 8) & 0xFF
+    
+    # 使用查表法计算CRC8
+    crc = CRC8_TABLE[crc ^ low_byte]
+    crc = CRC8_TABLE[crc ^ high_byte]
+    
+    return crc
+
+
+logger = logging.getLogger("quic")
+# 生成全局查找表
+CRC8_TABLE = generate_crc8_table()
 
 
 class HighwayClientProtocol(QuicConnectionProtocol,QObject):
@@ -69,17 +98,21 @@ class HighwayQuicClient(QObject):
         
         self.video_encoder=H264Encoder()
         self.video_encoder.frame_encoded.connect(self.send_video_test_data)
+        
+        self.tasks: List[asyncio.Task] = []
     
     def change_video_format(self,format):
         self.decoder.change_format(format)
 
     def reconnect_video_stream(self):
         print("reconnect video stream")
-        self.loop.create_task(self.establish_video_stream())
+        if self.client:
+            self.tasks.append(self.loop.create_task(self.establish_video_stream()))
 
     def reconnect_control_stream(self):
         print("reconnect control stream")
-        self.loop.create_task(self.establish_control_stream())
+        if self.client:
+            self.tasks.append(self.loop.create_task(self.establish_control_stream()))
 
     async def send_message(self,writer:asyncio.StreamWriter,message:Message):
          # 序列化消息
@@ -185,7 +218,7 @@ class HighwayQuicClient(QObject):
             self.loop.close()
 
     async def __update_speed(self):
-        while self.running:
+        while True:
             self.upload_speed.emit(self.upload_bytes)
             self.download_speed.emit(self.download_bytes)
             self.upload_bytes = 0
@@ -196,6 +229,7 @@ class HighwayQuicClient(QObject):
         """Run the event loop in a separate thread"""
         asyncio.set_event_loop(self.loop)
         try:
+            
             self.loop.run_until_complete(self.run())
             self.loop.run_forever()
         except Exception as e:
@@ -205,36 +239,52 @@ class HighwayQuicClient(QObject):
 
     def connection_lost(self):
         print("connection lost")
+        self.running=False
+        self.client=None
         self.connection_error.emit("quic lost")
+
 
     async def run(self):
         """Establish QUIC connection"""
-        try:
-            print("connect quic client")
-            async with connect(
-                self.setting.get("host","127.0.0.1"),
-                self.setting.get("port",30042),
-                configuration=self.configuration,
-                create_protocol=HighwayClientProtocol,
-            ) as client:
-                self.client = cast(HighwayClientProtocol, client)
-                self.client.quic_connection_lost.connect(self.connection_lost)
-                self.connected.emit()
-                self.loop.create_task(self.__update_speed())
-                self.loop.create_task(self.metric_collect())
-                self.loop.create_task(self.establish_video_stream())
-                self.loop.create_task(self.establish_control_stream())
-                self.loop.create_task(self.etablish_file_stream())
-                 # Keep connection alive
-                while self.running:
-                    # Check if client is still connected
-                    await client.ping()
-                    await asyncio.sleep(5)
-        except Exception as e:
-            print("connect error:",e)
-            self.connection_error.emit(str(e))
+        self.loop.create_task(self.__update_speed())
+        self.loop.create_task(self.metric_collect())
+        while True:
+            try:
+                print("connecting quic server")
+                async with connect(
+                    self.setting.get("host","127.0.0.1"),
+                    self.setting.get("port",30042),
+                    configuration=self.configuration,
+                    create_protocol=HighwayClientProtocol,
+                ) as client:
+                    print("connected quic server")
+                    self.client = cast(HighwayClientProtocol, client)
+                    self.client.quic_connection_lost.connect(self.connection_lost)
+                    self.connected.emit()
+                    
+                    self.tasks.append(self.loop.create_task(self.establish_video_stream()))
+                    self.tasks.append(self.loop.create_task(self.establish_control_stream()))
+                    self.tasks.append(self.loop.create_task(self.establish_file_stream()))
+                    # Keep connection alive
+                    while self.running:
+                        # Check if client is still connected
+                        await asyncio.wait_for(client.ping(),timeout=1)
+                        await asyncio.sleep(5)
+                    
+                        
+            except Exception as e:
+                print("connect error:",e)
+                self.connection_error.emit(str(e))
+                self.running=False
+                print("quit")
+                if self.tasks:
+                    await asyncio.gather(*self.tasks)
+                    print("all quit")
+                self.running=True
+            
+        
     
-    async def etablish_file_stream(self):
+    async def establish_file_stream(self):
         self.file_reader,self.file_writer=await self.client.create_stream(False)
         register_msg = Register(
             device=Device(
@@ -289,7 +339,7 @@ class HighwayQuicClient(QObject):
         # Start message reading task
         # self.video_encoder.start()
         # self.loop.create_task(self.send_test(writer=self.video_writer))
-        self.loop.create_task(self._read_video_stream(reader=self.video_reader))
+        self.tasks.append(self.loop.create_task(self._read_video_stream(reader=self.video_reader)))
     
     def send_video_test(self):
         self.video_encoder.start()
@@ -297,13 +347,15 @@ class HighwayQuicClient(QObject):
 
     def send_control_message(self, values: list):
         # TODO 发送速率小于生产速率会产生堆积 导致延迟
-        if self.loop and self.running:
+        if self.loop and self.running and self.client:
             print("send control message:",values)
             future = asyncio.run_coroutine_threadsafe(
                 self.control_stream_queue.put(Control(channels=values)), 
                 self.loop
             )
             future.result()  # 等待操作完成
+    
+    
     
     async def establish_control_stream(self):
         self.control_reader,self.control_writer=await self.client.create_stream(False)
@@ -316,7 +368,7 @@ class HighwayQuicClient(QObject):
         )
         print("send control register message")
         await self.send_message(writer=self.control_writer,message=register_msg)
-        self.loop.create_task(self.__send_control_message(writer=self.control_writer))
+        self.tasks.append(self.loop.create_task(self.__send_control_message(writer=self.control_writer)))
     
     async def __send_control_message(self,writer:asyncio.StreamWriter):
         try:
@@ -326,9 +378,11 @@ class HighwayQuicClient(QObject):
                 await self.send_message(writer=writer,message=message)
         except Exception as e:
             self.control_stream_failed.emit(f"Send control message error: {str(e)}")
+        finally:
+            print("__send_control_message quit")
     
     def send_video_test_data(self):
-        data = self.video_encoder.read()
+        data = self.video_encoder.read_frame()
         if self.loop and self.running:
             future = asyncio.run_coroutine_threadsafe(
                 self.send_message(writer=self.video_writer, message=Video(raw=data, timestamp=int(time.time()*1000))),
@@ -357,51 +411,19 @@ class HighwayQuicClient(QObject):
         """Background task to read incoming messages"""
         try:
             while self.running:
-                message = await self.receive_message(reader)
+                message = await asyncio.wait_for(self.receive_message(reader),timeout=1)
                 video = Video.FromString(message)
                 print("receive message",len(message),"video count:",video.counter)
                 self.decoder.write(video.raw)
                 self.latency_sum+=int(time.time()*1000)-video.timestamp
                 self.latency_count+=1
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as e:
+            print("_read_video_stream ",e)
             pass
         except Exception as e:
             print("read video stream error",e)
             self.video_stream_failed.emit(f"Read error: {str(e)}")
 
+        finally:
+            print("_read_video_stream quit")
 
-
-def generate_crc8_table():
-    crc8_table = [0] * 256
-    for i in range(256):
-        crc = i
-        for j in range(8):
-            if crc & 0x80:
-                crc = ((crc << 1) & 0xFF) ^ 0x07
-            else:
-                crc = (crc << 1) & 0xFF
-        crc8_table[i] = crc
-    return crc8_table
-
-def calculate_crc_fast(data: int) -> int:
-    crc = 0
-    # 获取低字节和高字节
-    low_byte = data & 0xFF
-    high_byte = (data >> 8) & 0xFF
-    
-    # 使用查表法计算CRC8
-    crc = CRC8_TABLE[crc ^ low_byte]
-    crc = CRC8_TABLE[crc ^ high_byte]
-    
-    return crc
-
-
-        
-
-
-
-
-
-logger = logging.getLogger("quic")
-# 生成全局查找表
-CRC8_TABLE = generate_crc8_table()
