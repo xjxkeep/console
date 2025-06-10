@@ -25,8 +25,7 @@ class WaveformWidget(QWidget):
         self.auto_scale = True
         self.scale_factor = 1.0
         
-        # 设置最小尺寸
-        self.setMinimumSize(300, 150)
+        self.setFixedHeight(100)
         
     def set_data(self, data):
         """设置要显示的波形数据"""

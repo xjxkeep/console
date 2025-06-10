@@ -258,7 +258,8 @@ class H264Decoder(QObject):
     def close(self):
         self.running = False
         
-        self.decode_thread.join()
+        if self.decode_thread.is_alive():
+            self.decode_thread.join()
 
     def write(self, data):
         if len(data)==0:
@@ -313,7 +314,8 @@ class H264Encoder(QObject):
     def close(self):
         self.running = False
         self.buffer.close()
-        self.encode_thread.join()
+        if self.encode_thread.is_alive():
+            self.encode_thread.join()
         
     def write(self,data):
         self.buffer.write(data)
