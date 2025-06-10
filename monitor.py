@@ -9,6 +9,8 @@ from protocol.highway_pb2 import Device,Video
 from pkg.codec import H264Decoder
 import time
 import threading
+from view.wave import WaveformWidget
+import numpy as np
 class StatusBar(QWidget):
     video_format_changed=pyqtSignal(str)
     def update(self):
@@ -109,7 +111,8 @@ class Monitor(QWidget):
         self.display.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self.display.setStyleSheet("background-color: rgb(0,0,0);color: rgb(255,255,255);")
         layout.addWidget(self.display)
-        
+        self.waveform=WaveformWidget()
+        layout.addWidget(self.waveform)
         
         self.testButton=QPushButton("测试本地视频解码")
         self.testButton.clicked.connect(self.test)
@@ -141,6 +144,10 @@ class Monitor(QWidget):
         self.decoder=H264Decoder()
         self.latency=0
         self.statusBar.video_format_changed.connect(self.video_format_changed.emit)
+    
+    def update_wave_form(self,value:np.ndarray):
+        print("update_wave_form",len(value))
+        self.waveform.set_data(value)
     
     def update_upload_speed(self,value:float):
         self.statusBar.update_upload_speed(value)

@@ -17,7 +17,7 @@ import threading
 from asyncio import Queue
 import os
 from pkg.audio import AudioEncoder,AudioPlayer
-
+import numpy as np
 def generate_crc8_table():
     crc8_table = [0] * 256
     for i in range(256):
@@ -72,6 +72,7 @@ class HighwayQuicClient(QObject):
     
     video_stream_failed = pyqtSignal(str)
     control_stream_failed = pyqtSignal(str)
+    input_wave_data = pyqtSignal(np.ndarray)
     
     
     def __init__(self, setting) -> None:
@@ -352,6 +353,7 @@ class HighwayQuicClient(QObject):
             message = await self.receive_message(reader)
             audio=Audio.FromString(message)
             print("receive audio frame",len(audio.raw))
+            self.input_wave_data.emit(np.frombuffer(audio.raw,dtype=np.int16))
             if audio.raw:
                 self.audio_player.write(audio.raw)
 
@@ -366,7 +368,6 @@ class HighwayQuicClient(QObject):
                 if len(data) == 0:
                     await asyncio.sleep(0.01)  # 短暂等待避免忙等待
                     continue
-                    
                 audio=Audio(raw=data)
                 await self.send_message(writer=writer,message=audio,flush=False)
                 await asyncio.sleep(0.01)
