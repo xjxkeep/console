@@ -12,3 +12,9 @@ setting.json
 dist/
 build/
 *.spec
+*.mp3
+*.raw
+*.g726
+*.wav
+*.aac
+*.h264

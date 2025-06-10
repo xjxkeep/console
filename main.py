@@ -88,10 +88,11 @@ class MainWindow(FluentWindow):
         print("quic client connection error",error)
         
     def closeEvent(self, a0: QCloseEvent | None) -> None:
-        self.controller.close()
-        self.monitor.close()
-        self.debug.close()
         print("mainwindow closeEvent")    
+        self.controller.close()
+        print("controller closed")
+        self.client.close()
+        print("client closed")    
         print(self.setting)
         with open("setting.json", "w") as f:
             json.dump(self.setting, f)

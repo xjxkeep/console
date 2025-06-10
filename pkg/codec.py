@@ -9,22 +9,146 @@ import time
 import io
 from queue import Queue
 from PyQt5.QtGui import QImage, QPixmap
+import asyncio
 
+# TODO 实现一个异步的buffer 优化性能
+class AsyncRingBuffer:
+    def __init__(self, maxSize=0, blocked=True, timeout=None):
+        self.maxSize = maxSize
+        self.blocked = blocked
+        self.timeout = timeout
+        self.buffer = deque()
+        
+        # 使用线程同步原语以支持同步操作
+        self.sync_semaphore = threading.Semaphore(0)
+        self.sync_lock = threading.Lock()
+        self.running = True
+        
+        # 异步版本的信号量和锁
+        self._async_semaphore = None
+        self._async_lock = None
+        self._loop = None
+
+    def _ensure_async_primitives(self):
+        """确保异步原语在正确的事件循环中创建"""
+        try:
+            current_loop = asyncio.get_running_loop()
+            if self._loop is None or self._loop != current_loop:
+                self._loop = current_loop
+                self._async_semaphore = asyncio.Semaphore(0)
+                self._async_lock = asyncio.Lock()
+        except RuntimeError:
+            # 没有运行的事件循环
+            pass
+
+    async def _async_read(self):
+        """异步读取方法"""
+        self._ensure_async_primitives()
+        if self._async_semaphore:
+            await self._async_semaphore.acquire()
+        async with self._async_lock:
+            if self.buffer:
+                return self.buffer.popleft()
+        return b''
+
+    def read(self, n):
+        """同步读取方法，供 av.open 使用"""
+        if not self.running:
+            return b''
+            
+        acquired = self.sync_semaphore.acquire(blocking=self.blocked, timeout=self.timeout)
+        if not acquired or not self.running:
+            return b''
+        
+        with self.sync_lock:
+            if self.buffer:
+                data = self.buffer.popleft()
+                print("sync read", n, "res:", len(data))
+                return data
+        return b''
+    
+    def size(self):
+        """获取缓冲区大小"""
+        with self.sync_lock:
+            return len(self.buffer)
+    
+    async def write(self, data):
+        """异步写入方法"""
+        if not data:
+            return
+            
+        print("async write", len(data))
+        self._ensure_async_primitives()
+        
+        # 同时更新同步和异步缓冲区
+        with self.sync_lock:
+            self.buffer.append(data)
+            current_size = len(self.buffer)
+            
+            # 处理最大大小限制
+            if self.maxSize > 0 and current_size > self.maxSize:
+                print("fifo full, dropping oldest data")
+                self.buffer.popleft()
+            else:
+                # 释放同步信号量
+                self.sync_semaphore.release()
+                # 释放异步信号量
+                if self._async_semaphore:
+                    self._async_semaphore.release()
+        
+        print("async write ok")
+                
+    async def read_single(self):
+        """异步读取单个数据"""
+        return await self._async_read()
+    
+    def write_sync(self, data):
+        """同步写入方法"""
+        if not data:
+            return
+            
+        print("sync write", len(data))
+        with self.sync_lock:
+            self.buffer.append(data)
+            current_size = len(self.buffer)
+            
+            if self.maxSize > 0 and current_size > self.maxSize:
+                print("fifo full, dropping oldest data")
+                self.buffer.popleft()
+            else:
+                self.sync_semaphore.release()
+        
+    def close(self):
+        """关闭缓冲区"""
+        self.running = False
+        # 释放所有等待的线程/协程
+        self.sync_semaphore.release()
+        if self._async_semaphore:
+            self._async_semaphore.release()
+    
+    
 class BufferStream:
     
-    def __init__(self):
+    def __init__(self,maxSize=0,blocked=True,timeout=None):
+        self.maxSize=maxSize
+        self.blocked=blocked
+        self.timeout=timeout
         self.buffer = deque()
         self.semaphore = threading.Semaphore(0)
         self.running = True
         self.lock = threading.Lock()  # Add a lock for buffer operations
         self.buffer_size=0
 
+    def size(self):
+        with self.lock:
+            return self.buffer_size
+
     def __read(self):
         if not self.running:
-            return bytes()
-        acquired = self.semaphore.acquire()
+            return None
+        acquired = self.semaphore.acquire(blocking=self.blocked,timeout=self.timeout)
         if not self.running or not acquired:
-            return bytes()
+            return None
         
         with self.lock:  # Use lock to ensure thread-safe access to the buffer
             self.buffer_size-=1
@@ -34,7 +158,12 @@ class BufferStream:
         with self.lock:  # Use lock to ensure thread-safe access to the buffer
             self.buffer.append(data)
             self.buffer_size+=1
-        self.semaphore.release()
+            if self.maxSize>0 and self.buffer_size>self.maxSize:
+                print("fifo full")
+                self.buffer.popleft()
+                self.buffer_size-=1
+            else:
+                self.semaphore.release()
 
     def __write_front(self, data):
         with self.lock:  # Use lock to ensure thread-safe access to the buffer
@@ -42,7 +171,8 @@ class BufferStream:
         self.semaphore.release()
 
     def readSingle(self):
-        return self.__read()
+        result = self.__read()
+        return result
     
     # def read(self, n):
     #     data = self.__read()
@@ -60,10 +190,12 @@ class BufferStream:
     #     return data[:n]
 
     def read(self, n):
+        
         return self.__read()
     
     def write(self, data):
         self.__write(data)
+
     
     def close(self):
         self.running = False

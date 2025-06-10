@@ -7,3 +7,4 @@ uuid
 pyinstaller
 opencv-python
 qrcode
+pyaudio

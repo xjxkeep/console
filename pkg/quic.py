@@ -11,12 +11,12 @@ from aioquic.quic.events import QuicEvent, StreamDataReceived,ConnectionTerminat
 from aioquic.quic.logger import QuicFileLogger
 from PyQt5.QtCore import QObject,pyqtSignal
 from google.protobuf.message import Message
-from protocol.highway_pb2 import Register,Device,Control,Video,File
+from protocol.highway_pb2 import Register,Device,Control,Video,File,Audio
 import time
 import threading
 from asyncio import Queue
 import os
-
+from pkg.audio import AudioEncoder,AudioPlayer
 
 def generate_crc8_table():
     crc8_table = [0] * 256
@@ -73,6 +73,7 @@ class HighwayQuicClient(QObject):
     video_stream_failed = pyqtSignal(str)
     control_stream_failed = pyqtSignal(str)
     
+    
     def __init__(self, setting) -> None:
         super().__init__()
         self.setting=setting
@@ -99,6 +100,9 @@ class HighwayQuicClient(QObject):
         self.video_encoder=H264Encoder()
         self.video_encoder.frame_encoded.connect(self.send_video_test_data)
         
+        self.audio_encoder=AudioEncoder(format="g726")
+        self.audio_player=AudioPlayer(format="g726")
+        
         self.tasks: List[asyncio.Task] = []
     
     def change_video_format(self,format):
@@ -114,7 +118,7 @@ class HighwayQuicClient(QObject):
         if self.client:
             self.tasks.append(self.loop.create_task(self.establish_control_stream()))
 
-    async def send_message(self,writer:asyncio.StreamWriter,message:Message):
+    async def send_message(self,writer:asyncio.StreamWriter,message:Message,flush=True):
          # 序列化消息
         data = message.SerializeToString()
         
@@ -130,8 +134,9 @@ class HighwayQuicClient(QObject):
         
         # 发送header和数据
         writer.write(header + data)
-        print("send header:",header ,length)
-        await writer.drain()
+        print("send header:",header ,length, f"writer_id: {id(writer)}")
+        if flush:
+            await writer.drain()
         self.upload_bytes+=len(header+data)
         
     async def receive_message(self,reader:asyncio.StreamReader):
@@ -177,10 +182,6 @@ class HighwayQuicClient(QObject):
                     if not has_ff:
                         break
                         
-                
-
-        
-
     def start(self):
         """Start the client in a new thread"""
         if self.running:
@@ -203,6 +204,8 @@ class HighwayQuicClient(QObject):
             
         self.running = False
         self.video_encoder.close()
+        self.audio_encoder.close()
+        self.audio_player.close()
         self.decoder.close()
         # Stop the event loop
         if self.loop and self.loop.is_running():
@@ -219,6 +222,7 @@ class HighwayQuicClient(QObject):
 
     async def __update_speed(self):
         while True:
+            print(f"Network stats - Upload: {self.upload_bytes} bytes, Download: {self.download_bytes} bytes")
             self.upload_speed.emit(self.upload_bytes)
             self.download_speed.emit(self.download_bytes)
             self.upload_bytes = 0
@@ -265,6 +269,7 @@ class HighwayQuicClient(QObject):
                     self.tasks.append(self.loop.create_task(self.establish_video_stream()))
                     self.tasks.append(self.loop.create_task(self.establish_control_stream()))
                     self.tasks.append(self.loop.create_task(self.establish_file_stream()))
+                    self.tasks.append(self.loop.create_task(self.establish_audio_stream()))
                     # Keep connection alive
                     while self.running:
                         # Check if client is still connected
@@ -274,14 +279,14 @@ class HighwayQuicClient(QObject):
                         
             except Exception as e:
                 print("connect error:",e)
-                self.connection_error.emit(str(e))
-                self.running=False
+                # self.connection_error.emit(str(e))
+                # self.running=False
                 print("quit")
-                if self.tasks:
-                    await asyncio.gather(*self.tasks)
-                    print("all quit")
-                self.running=True
-            
+                # if self.tasks:
+                #     await asyncio.gather(*self.tasks)
+                #     print("all quit")
+                # self.running=True
+
         
     
     async def establish_file_stream(self):
@@ -318,6 +323,61 @@ class HighwayQuicClient(QObject):
                 sendSize+=len(data)
                 self.file_send_progress.emit(fileName,round(sendSize*100/fileSize))
 
+
+    async def establish_audio_stream(self):
+        self.audio_reader, self.audio_writer = await self.client.create_stream(False)
+        print(f"Audio stream created - Reader: {id(self.audio_reader)}, Writer: {id(self.audio_writer)}")
+        
+        register_msg = Register(
+            device=Device(
+                id=self.setting.get("device_id",1),
+                message_type=Device.MessageType.AUDIO,
+                # device_type=Device.DeviceType.CONTROLLER
+            ),
+            subscribe_device=Device(
+                id=self.setting.get("source_device_id",1),
+                message_type=Device.MessageType.AUDIO,
+                # device_type=Device.DeviceType.RECEIVER
+            )
+        )
+        await self.send_message(writer=self.audio_writer,message=register_msg)
+        print(f"Audio stream register sent successfully, writer state: {self.audio_writer.is_closing()}")
+        
+        self.tasks.append(self.loop.create_task(self.__read_audio_stream(reader=self.audio_reader)))
+        self.tasks.append(self.loop.create_task(self.__send_audio_stream(writer=self.audio_writer)))
+        print(f"Audio stream tasks created, total tasks: {len(self.tasks)}")
+        
+    async def __read_audio_stream(self,reader:asyncio.StreamReader):
+        while self.running:
+            message = await self.receive_message(reader)
+            audio=Audio.FromString(message)
+            print("receive audio frame",len(audio.raw))
+            if audio.raw:
+                self.audio_player.write(audio.raw)
+
+    async def __send_audio_stream(self,writer:asyncio.StreamWriter):
+        print("__send_audio_stream task started")
+        # 等待一下，确保establish函数完全完成
+        await asyncio.sleep(0.1)
+        print("__send_audio_stream starting to send data")
+        try:
+            while self.running:
+                data=self.audio_encoder.read_frame()
+                if len(data) == 0:
+                    await asyncio.sleep(0.01)  # 短暂等待避免忙等待
+                    continue
+                    
+                audio=Audio(raw=data)
+                await self.send_message(writer=writer,message=audio,flush=False)
+                await asyncio.sleep(0.01)
+                
+        except Exception as e:
+            print(f"__send_audio_stream error: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            print("__send_audio_stream task ended")
+    
     async def establish_video_stream(self):
         """Establish video stream after connection"""
         self.video_reader, self.video_writer = await self.client.create_stream(False)
@@ -339,7 +399,7 @@ class HighwayQuicClient(QObject):
         # Start message reading task
         # self.video_encoder.start()
         # self.loop.create_task(self.send_test(writer=self.video_writer))
-        self.tasks.append(self.loop.create_task(self._read_video_stream(reader=self.video_reader)))
+        self.tasks.append(self.loop.create_task(self.__read_video_stream(reader=self.video_reader)))
     
     def send_video_test(self):
         self.video_encoder.start()
@@ -368,6 +428,7 @@ class HighwayQuicClient(QObject):
         )
         print("send control register message")
         await self.send_message(writer=self.control_writer,message=register_msg)
+        print(f"Control stream register sent successfully, writer state: {self.control_writer.is_closing()}")
         self.tasks.append(self.loop.create_task(self.__send_control_message(writer=self.control_writer)))
     
     async def __send_control_message(self,writer:asyncio.StreamWriter):
@@ -407,11 +468,11 @@ class HighwayQuicClient(QObject):
                 self.latency_sum=0
                 self.latency_count=0
             
-    async def _read_video_stream(self,reader:asyncio.StreamReader):
+    async def __read_video_stream(self,reader:asyncio.StreamReader):
         """Background task to read incoming messages"""
         try:
             while self.running:
-                message = await asyncio.wait_for(self.receive_message(reader),timeout=1)
+                message = await self.receive_message(reader)
                 video = Video.FromString(message)
                 print("receive message",len(message),"video count:",video.counter)
                 self.decoder.write(video.raw)
@@ -426,4 +487,7 @@ class HighwayQuicClient(QObject):
 
         finally:
             print("_read_video_stream quit")
+
+
+
 

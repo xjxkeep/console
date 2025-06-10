@@ -2,8 +2,7 @@ from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from collections.abc import Iterable as _Iterable, Mapping as _Mapping
-from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
+from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -21,10 +20,12 @@ class Device(_message.Message):
         CONTROL: _ClassVar[Device.MessageType]
         REPORT: _ClassVar[Device.MessageType]
         FILE: _ClassVar[Device.MessageType]
+        AUDIO: _ClassVar[Device.MessageType]
     VIDEO: Device.MessageType
     CONTROL: Device.MessageType
     REPORT: Device.MessageType
     FILE: Device.MessageType
+    AUDIO: Device.MessageType
     DEVICE_TYPE_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_TYPE_FIELD_NUMBER: _ClassVar[int]
     ID_FIELD_NUMBER: _ClassVar[int]
@@ -84,3 +85,13 @@ class File(_message.Message):
     block_id: int
     last_block: bool
     def __init__(self, name: _Optional[str] = ..., offset: _Optional[int] = ..., total_size: _Optional[int] = ..., data: _Optional[bytes] = ..., checksum: _Optional[int] = ..., block_id: _Optional[int] = ..., last_block: bool = ...) -> None: ...
+
+class Audio(_message.Message):
+    __slots__ = ("raw", "timestamp", "counter")
+    RAW_FIELD_NUMBER: _ClassVar[int]
+    TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
+    COUNTER_FIELD_NUMBER: _ClassVar[int]
+    raw: bytes
+    timestamp: int
+    counter: int
+    def __init__(self, raw: _Optional[bytes] = ..., timestamp: _Optional[int] = ..., counter: _Optional[int] = ...) -> None: ...
