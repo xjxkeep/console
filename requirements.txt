@@ -1,6 +1,6 @@
+pyav==14.1.0
 pygame
 aioquic
-pyav
 PyQt5
 PyQt-Fluent-Widgets
 protobuf
