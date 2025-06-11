@@ -345,7 +345,11 @@ class AudioEncoder:
     def read_frame(self):
         data=self.out_buffer.readSingle()
         return data
-                
+    
+    async def read_frame_async(self):
+        data= await self.out_buffer.read_single_async()
+        return data
+    
     def read(self,n):
         print("read called ",n)
         return None

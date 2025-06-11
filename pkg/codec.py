@@ -10,7 +10,8 @@ import io
 from queue import Queue
 from PyQt5.QtGui import QImage, QPixmap
 import asyncio
-
+from concurrent.futures import ThreadPoolExecutor
+executor = ThreadPoolExecutor(max_workers=1)
 # TODO 实现一个异步的buffer 优化性能
 class AsyncRingBuffer:
     def __init__(self, maxSize=0, blocked=True, timeout=None):
@@ -139,6 +140,7 @@ class BufferStream:
         self.lock = threading.Lock()  # Add a lock for buffer operations
         self.buffer_size=0
 
+
     def size(self):
         with self.lock:
             return self.buffer_size
@@ -165,15 +167,18 @@ class BufferStream:
             else:
                 self.semaphore.release()
 
-    def __write_front(self, data):
-        with self.lock:  # Use lock to ensure thread-safe access to the buffer
-            self.buffer.appendleft(data)
-        self.semaphore.release()
-
     def readSingle(self):
         result = self.__read()
         return result
     
+    
+    async def read_single_async(self):
+        loop=asyncio.get_event_loop()
+        result=await loop.run_in_executor(executor,self.__read)
+        return result
+    
+  
+        
     # def read(self, n):
     #     data = self.__read()
     #     if not data:

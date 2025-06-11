@@ -364,13 +364,13 @@ class HighwayQuicClient(QObject):
         print("__send_audio_stream starting to send data")
         try:
             while self.running:
-                data=self.audio_encoder.read_frame()
+                data=await self.audio_encoder.read_frame_async()
                 if len(data) == 0:
                     await asyncio.sleep(0.01)  # 短暂等待避免忙等待
                     continue
                 audio=Audio(raw=data)
                 await self.send_message(writer=writer,message=audio,flush=False)
-                await asyncio.sleep(0.01)
+
                 
         except Exception as e:
             print(f"__send_audio_stream error: {e}")
