@@ -1,14 +1,12 @@
 import asyncio
 import logging
 import ssl
-import struct
-from typing import Dict, Optional, cast, List
+from typing import cast, List
 from pkg.codec import H264Encoder,H264Decoder
 from aioquic.asyncio.client import connect
 from aioquic.asyncio.protocol import QuicConnectionProtocol
 from aioquic.quic.configuration import QuicConfiguration
-from aioquic.quic.events import QuicEvent, StreamDataReceived,ConnectionTerminated
-from aioquic.quic.logger import QuicFileLogger
+from aioquic.quic.events import QuicEvent,ConnectionTerminated
 from PyQt5.QtCore import QObject,pyqtSignal
 from google.protobuf.message import Message
 from protocol.highway_pb2 import Register,Device,Control,Video,File,Audio
@@ -105,6 +103,7 @@ class HighwayQuicClient(QObject):
         self.audio_player=AudioPlayer(format="g726")
         
         self.tasks: List[asyncio.Task] = []
+        
     
     def change_video_format(self,format):
         self.decoder.change_format(format)
@@ -135,7 +134,7 @@ class HighwayQuicClient(QObject):
         
         # 发送header和数据
         writer.write(header + data)
-        print("send header:",header ,length, f"writer_id: {id(writer)}")
+
         if flush:
             await writer.drain()
         self.upload_bytes+=len(header+data)
@@ -156,7 +155,7 @@ class HighwayQuicClient(QObject):
                     remaining = await reader.readexactly(remain_size)
                     header[4-remain_size:] = remaining
                     self.download_bytes+=remain_size
-                    print("receive header:",header.hex())
+
                     
                     # 获取长度并验证CRC
                     length = (header[2]&0xff | (header[3]&0xff)<<8)
