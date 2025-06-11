@@ -35,11 +35,10 @@ jobs:
 
       - name: Package Application with PyInstaller
         run: |
-          pyinstaller -n console main.py --hidden-import uuid  # 替换为你的Python脚本文件
-          # 或者使用.spec文件
+          pyinstaller -n console main.py --hidden-import uuid
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Windows-exe
+          name: console-windows
           path: dist/console  # 替换为生成的可执行文件路径

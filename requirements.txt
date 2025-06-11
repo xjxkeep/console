@@ -1,6 +1,7 @@
 pygame
 aioquic
 pyav
+PyQt5
 PyQt-Fluent-Widgets
 protobuf
 uuid
@@ -8,3 +9,4 @@ pyinstaller
 opencv-python
 qrcode
 pyaudio
+numpy
