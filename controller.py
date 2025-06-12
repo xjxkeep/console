@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import *
 import sys
 from PyQt5.QtCore import QTimer
 from pkg.joystick import JoyStick
-
+import threading
 class Channel(QWidget):
     channelSignal=pyqtSignal(int)
     def setupUi(self):
@@ -100,17 +100,17 @@ class Detector(QWidget):
     
     def refreshDevices(self):
         self.setDevices(self.getDevices())
+    
+
         
+    
     def __init__(self) -> None:
         super().__init__()
         self.setupUi()
-        self.deviceMap=dict()
-        self.loading.emit("加载中...")
-        
+        self.deviceMap=dict()        
         self.joystick=JoyStick()
-        self.joystick.init()
-        
-        self.loading.emit("加载成功")
+        threading.Thread(target=self.joystick.init).start()
+       
 
 
 class Controller(ScrollArea):
