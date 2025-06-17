@@ -23,5 +23,7 @@ setting=load_setting()
 client=HighwayQuicClient(setting)
 client.start()
 
-while True:
-    time.sleep(10)
+
+time.sleep(5)
+
+client.close()

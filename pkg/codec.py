@@ -147,10 +147,10 @@ class BufferStream:
 
     def __read(self):
         if not self.running:
-            return None
+            return bytes()
         acquired = self.semaphore.acquire(blocking=self.blocked,timeout=self.timeout)
         if not self.running or not acquired:
-            return None
+            return bytes()
         
         with self.lock:  # Use lock to ensure thread-safe access to the buffer
             self.buffer_size-=1
@@ -204,7 +204,7 @@ class BufferStream:
     
     def close(self):
         self.running = False
-        self.semaphore.release()
+        self.semaphore.release(10)
 
 class HighBuffer:
     def __init__(self):
@@ -254,17 +254,16 @@ class H264Decoder(QObject):
         self.stream=BufferStream()
         self.frames=Queue()
         self.lock=threading.Lock()
+        self.format=format
         self.decode_thread = threading.Thread(target=self.__decode_frames,daemon=True)
+        self.decode_thread.start()
         self.has_data = False
         self.running = True
-        self.format=format
-        self.decode_thread.start()
 
     def close(self):
         self.running = False
-        
-        if self.decode_thread.is_alive():
-            self.decode_thread.join()
+        self.stream.close()
+        self.decode_thread.join()
 
     def write(self, data):
         if len(data)==0:

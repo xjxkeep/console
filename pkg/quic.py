@@ -191,11 +191,11 @@ class HighwayQuicClient(QObject):
         self.loop = asyncio.new_event_loop()
         
         # Start event loop in new thread
-        self.thread = threading.Thread(
+        self.run_thread= threading.Thread(
             target=self._run_event_loop,
             daemon=True
         )
-        self.thread.start()
+        self.run_thread.start()
 
     def close(self):
         """Stop the client and cleanup resources"""
@@ -203,25 +203,41 @@ class HighwayQuicClient(QObject):
             return
             
         self.running = False
+        # 取消所有异步任务
+        for task in self.tasks:
+            if not task.done():
+                task.cancel()
+        if self.client:
+            self.client.close()
+            asyncio.run_coroutine_threadsafe(self.client.wait_closed(),self.loop).result()
+            print("client closed")
         self.video_encoder.close()
+        print("video encoder closed")
         self.audio_encoder.close()
-        self.audio_player.close()
+        print("audio encoder closed")
         self.decoder.close()
+        print("decoder closed")
+        self.audio_player.close()
+        print("audio player closed")
+        
+        
+        self.clear_tasks()
         # Stop the event loop
         if self.loop and self.loop.is_running():
             self.loop.call_soon_threadsafe(self.loop.stop)
         
-        
+        print("loop stop")
         # Wait for the thread to finish
-        if self.thread:
-            self.thread.join()
-        
+        if self.run_thread:
+            self.run_thread.join()
+        print("thread quit")
         # Close the loop if it's not already closed
         if self.loop and not self.loop.is_closed():
             self.loop.close()
+            print("loop close")
 
     async def __update_speed(self):
-        while True:
+        while self.running:
             print(f"Network stats - Upload: {self.upload_bytes} bytes, Download: {self.download_bytes} bytes")
             self.upload_speed.emit(self.upload_bytes)
             self.download_speed.emit(self.download_bytes)
@@ -247,14 +263,19 @@ class HighwayQuicClient(QObject):
         self.client=None
         self.connection_error.emit("quic lost")
 
-
+    def clear_tasks(self):
+        for task in self.tasks:
+            if not task.done():
+                task.cancel()
+        self.tasks=[]
+    
     async def run(self):
         """Establish QUIC connection"""
-        self.loop.create_task(self.__update_speed())
-        self.loop.create_task(self.metric_collect())
-        while True:
+       
+        while self.running:
             try:
-                print("connecting quic server")
+                
+                print("connecting quic server, running",self.running)
                 async with connect(
                     self.setting.get("host","127.0.0.1"),
                     self.setting.get("port",30042),
@@ -263,9 +284,11 @@ class HighwayQuicClient(QObject):
                 ) as client:
                     print("connected quic server")
                     self.client = cast(HighwayClientProtocol, client)
+                    
                     self.client.quic_connection_lost.connect(self.connection_lost)
                     self.connected.emit()
-                    
+                    self.tasks.append(self.loop.create_task(self.__update_speed()))
+                    self.tasks.append(self.loop.create_task(self.__metric_collect()))
                     self.tasks.append(self.loop.create_task(self.establish_video_stream()))
                     self.tasks.append(self.loop.create_task(self.establish_control_stream()))
                     self.tasks.append(self.loop.create_task(self.establish_file_stream()))
@@ -279,13 +302,10 @@ class HighwayQuicClient(QObject):
                         
             except Exception as e:
                 print("connect error:",e)
-                # self.connection_error.emit(str(e))
-                # self.running=False
-                print("quit")
-                # if self.tasks:
-                #     await asyncio.gather(*self.tasks)
-                #     print("all quit")
-                # self.running=True
+                self.client.close()
+                await self.client.wait_closed()
+                self.clear_tasks()
+                print("tasks cleared!")
 
         
     
@@ -348,13 +368,20 @@ class HighwayQuicClient(QObject):
         print(f"Audio stream tasks created, total tasks: {len(self.tasks)}")
         
     async def __read_audio_stream(self,reader:asyncio.StreamReader):
-        while self.running:
-            message = await self.receive_message(reader)
-            audio=Audio.FromString(message)
-            print("receive audio frame",len(audio.raw))
-            self.input_wave_data.emit(np.frombuffer(audio.raw,dtype=np.int16))
-            if audio.raw:
-                self.audio_player.write(audio.raw)
+        try:
+            while self.running:
+                message = await self.receive_message(reader)
+                audio=Audio.FromString(message)
+                print("receive audio frame",len(audio.raw))
+                self.input_wave_data.emit(np.frombuffer(audio.raw,dtype=np.int16))
+                if audio.raw:
+                    self.audio_player.write(audio.raw)
+        except asyncio.CancelledError:
+            print("__read_audio_stream canceled")
+        except Exception as e:
+            print(f"__read_audio_stream error: {e}")
+        finally:
+            print("__read_audio_stream quit")
 
     async def __send_audio_stream(self,writer:asyncio.StreamWriter):
         print("__send_audio_stream task started")
@@ -369,8 +396,8 @@ class HighwayQuicClient(QObject):
                     continue
                 audio=Audio(raw=data)
                 await self.send_message(writer=writer,message=audio,flush=False)
-
-                
+        except asyncio.CancelledError:
+            print("__send_audio_stream canceled")
         except Exception as e:
             print(f"__send_audio_stream error: {e}")
             import traceback
@@ -460,7 +487,7 @@ class HighwayQuicClient(QObject):
                 else:break
                 await asyncio.sleep(0.02)
     
-    async def metric_collect(self):
+    async def __metric_collect(self):
         while self.running:
             await asyncio.sleep(1)
             if self.latency_count>0:
@@ -480,7 +507,6 @@ class HighwayQuicClient(QObject):
                 self.latency_count+=1
         except asyncio.CancelledError as e:
             print("_read_video_stream ",e)
-            pass
         except Exception as e:
             print("read video stream error",e)
             self.video_stream_failed.emit(f"Read error: {str(e)}")

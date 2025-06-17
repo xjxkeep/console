@@ -37,15 +37,24 @@ class AudioEncoder:
         self.fps_task=None
 
     async def __fps(self):
-        while self.running:
-            print(f"audio encode fps:{self.fps}")
-            self.fps=0
-            await asyncio.sleep(1)
-        
+        try:
+            while self.running:
+                print(f"audio encode fps:{self.fps}")
+                self.fps=0
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            print("__fps task cancelled")
+            # 可以做一些清理工作
+            return
     def close(self):
         self.running = False
         if self.fps_task:
-            self.fps_task.cancel()
+            if not self.fps_task.done():
+                self.fps_task.cancel()
+            try:
+                self.loop.run_until_complete(self.fps_task)
+            except asyncio.CancelledError:
+                pass
         self.encode_thread.join()
         # 刷新编码器缓冲
         if self.out_stream and self.container:
@@ -139,22 +148,50 @@ class AudioPlayer:
         self.decode_thread = threading.Thread(target=self.__decode_frames,daemon=True)
         self.decode_thread.start()
         self.fps=0
-        self.play_sign=threading.Lock()
-        self.play_sign.acquire()
         self.running=True
         self.loop=asyncio.new_event_loop()
         self.fps_task=None
         self.play_task=None
     
     async def __fps(self):
-        while self.running:
-            print("audio decode fps:",self.fps)
-            self.fps=0
-            await asyncio.sleep(1)
-    
+        try:
+            while self.running:
+                print("audio decode fps:",self.fps)
+                self.fps=0
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            print("__fps task cancelled")
+            # 可以做一些清理工作
+            return
     def close(self):
-        self.running=False
+        self.running = False
+        if hasattr(self, 'container'):
+            self.container.close()
+        self.stream.close()
+        # 等待线程退出
         self.decode_thread.join()
+        # 取消异步任务
+        if self.fps_task and not self.fps_task.done():
+            self.fps_task.cancel()
+            try:
+                self.loop.run_until_complete(self.fps_task)
+            except asyncio.CancelledError:
+                pass
+        if self.play_task and not self.play_task.done():
+            self.play_task.cancel()
+            try:
+                self.loop.run_until_complete(self.play_task)
+            except asyncio.CancelledError:
+                pass
+        
+        # 停止事件循环
+        if self.loop.is_running():
+            self.loop.call_soon_threadsafe(self.loop.stop)
+        
+        # 关闭事件循环
+        if not self.loop.is_closed():
+            self.loop.close()
+        
         
     
     def write(self,data):
@@ -166,21 +203,24 @@ class AudioPlayer:
     
     
     async def __play(self):
-        self.play_sign.acquire()
-        self.pa=pyaudio.PyAudio()
-        self.audio_stream=self.pa.open(format=pyaudio.paInt16,
-                    channels=self.channels,
-                    rate=self.rate,
-                    output=True)
-        self.audio_stream.start_stream()
-        while self.running:
-            data=await self.pcm_buffer.read_single_async()
-            self.audio_stream.write(data)
+        try:
+            self.pa=pyaudio.PyAudio()
+            self.audio_stream=self.pa.open(format=pyaudio.paInt16,
+                        channels=self.channels,
+                        rate=self.rate,
+                        output=True)
+            self.audio_stream.start_stream()
+            while self.running:
+                data=await self.pcm_buffer.read_single_async()
+                self.audio_stream.write(data)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self.pa.close(self.audio_stream)
+            self.audio_stream.stop_stream()
+            self.audio_stream.close()
         
-        self.audio_stream.stop_stream()
-        self.audio_stream.close()
-        self.pa.close()
-            
+                
     
     def __decode_frames(self):
         try:
@@ -191,7 +231,6 @@ class AudioPlayer:
 
             self.rate=self.container.streams.audio[0].rate
             self.channels=self.container.streams.audio[0].channels
-            self.play_sign.release()
             print(f"Detected audio format: rate={self.rate}, channels={self.channels}")
             
             
@@ -232,7 +271,9 @@ class AudioPlayer:
                             self.pcm_buffer.write(pcm.tobytes())
                         else:
                             print(f"Unsupported audio format: {frame.format.name}")
-                            
+                except asyncio.CancelledError:
+                    print("decode frames canceled")
+                    return 
                 except av.error.EOFError:
                     print("End of audio stream")
                     break
