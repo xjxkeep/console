@@ -7,7 +7,9 @@ from about import About
 from setting import SettingView
 import sys
 from PyQt5.QtWidgets import QApplication
-from qfluentwidgets import FluentWindow,FluentIcon,NavigationItemPosition
+from qfluentwidgets.window import FluentWindow
+from qfluentwidgets.common import FluentIcon
+
 from pkg.quic import HighwayQuicClient
 from protocol.highway_pb2 import Device
 import json
@@ -37,8 +39,8 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.debug,FluentIcon.DEVELOPER_TOOLS, "Debug")
         self.addSubInterface(self.about,FluentIcon.FEEDBACK,"About")
         
-        
-        
+    
+
         
     def __init__(self):
         super().__init__()
@@ -90,10 +92,10 @@ class MainWindow(FluentWindow):
         
     def closeEvent(self, a0: QCloseEvent | None) -> None:
         print("mainwindow closeEvent")    
-        self.controller.close()
-        print("controller closed")
         self.client.close()
         print("client closed")    
+        self.controller.close()
+        print("controller closed")
         print(self.setting)
         with open("setting.json", "w") as f:
             json.dump(self.setting, f)

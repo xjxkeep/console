@@ -51,7 +51,7 @@ class StatusBar(QWidget):
         menu=RoundMenu(parent=self)
         menu.addActions([
             Action('h264'),
-            Action('h265'),
+            Action('hevc'),
         ])
         self.video_format.setMenu(menu)
         menu.triggered.connect(self.__handle_video_format_menu_triggered)

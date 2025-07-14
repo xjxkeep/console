@@ -302,8 +302,9 @@ class HighwayQuicClient(QObject):
                         
             except Exception as e:
                 print("connect error:",e)
-                self.client.close()
-                await self.client.wait_closed()
+                if self.client:
+                    self.client.close()
+                    await self.client.wait_closed()
                 self.clear_tasks()
                 print("tasks cleared!")
 

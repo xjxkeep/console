@@ -279,6 +279,7 @@ class H264Decoder(QObject):
         self.stream.close()
         self.decode_thread.join()
         self.running=True
+        self.stream=BufferStream()
         self.decode_thread = threading.Thread(target=self.__decode_frames,daemon=True)
         self.decode_thread.start()
     
@@ -287,6 +288,7 @@ class H264Decoder(QObject):
     def __decode_frames(self):
         print("start decode video with format",self.format)
         self.container = av.open(self.stream,format=self.format,buffer_size=1024*1024*10)
+        
         while self.running:
             try:
             
@@ -438,8 +440,8 @@ def test_encode_decode():
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     buffer=BufferStream()
     # 创建输出容器
-    output_container = av.open(buffer, 'w',format='h264')
-    stream = output_container.add_stream('h264', rate=fps)
+    output_container = av.open(buffer, 'w',format='hevc')
+    stream = output_container.add_stream('hevc', rate=fps)
     stream.width = width
     stream.height = height
     stream.pix_fmt = 'yuv420p'
@@ -465,7 +467,7 @@ def test_encode_decode():
     threading.Thread(target=read_frame,daemon=True).start()
     def decode_h264_stream(stream):
             # 创建一个解码器上下文
-            container = av.open(stream, format='h264')
+            container = av.open(stream, format='hevc')
             while True: 
                 # 遍历每一个帧
                 for frame in container.decode(video=0):
@@ -484,6 +486,24 @@ def test_encode_decode():
     cap.release()
     cv2.destroyAllWindows()
 
+
+def test_hevc_encode_decode():
+    def decode_h265_stream(stream):
+            # 创建一个解码器上下文
+            container = av.open(stream, format='hevc')
+            while True: 
+                # 遍历每一个帧
+                for frame in container.decode(video=0):
+                    # 处理解码后的帧
+                    # 这里可以对frame进行进一步处理，比如显示或保存
+                    # 例如，使用OpenCV显示帧：
+                    
+                    img = frame.to_ndarray(format='bgr24')
+                    cv2.imshow('Frame', img)
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        print("decode exit")
+                        return
+    decode_h265_stream("pkg/4k2.hevc")
 
 def buffer_benchmark():
     buffer = HighBuffer()
@@ -558,6 +578,6 @@ if __name__ == "__main__":
         decode_h264_stream(stream)
 
     # buffer_benchmark()
-    test_encode_decode()
+    test_hevc_encode_decode()
     # test_high_buffer()
     print("done")
