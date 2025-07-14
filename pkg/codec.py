@@ -205,6 +205,7 @@ class BufferStream:
     def close(self):
         self.running = False
         self.semaphore.release(10)
+        self.buffer.clear()
 
 class HighBuffer:
     def __init__(self):
@@ -253,7 +254,6 @@ class H264Decoder(QObject):
         super().__init__()
         self.stream=BufferStream()
         self.frames=Queue()
-        self.lock=threading.Lock()
         self.format=format
         self.decode_thread = threading.Thread(target=self.__decode_frames,daemon=True)
         self.decode_thread.start()
@@ -274,35 +274,39 @@ class H264Decoder(QObject):
         return self.frames.get()
     
     def change_format(self,format):
-        with self.lock:
-            self.format=format
-            self.container.close()
-            self.container = av.open(self.stream,format=self.format)
-            
-        
-
+        self.format=format
+        self.running=False
+        self.stream.close()
+        self.decode_thread.join()
+        self.running=True
+        self.decode_thread = threading.Thread(target=self.__decode_frames,daemon=True)
+        self.decode_thread.start()
+    
+    
+    
     def __decode_frames(self):
-        self.container = av.open(self.stream,format=self.format)
-        print("start decode")
+        print("start decode video with format",self.format)
+        self.container = av.open(self.stream,format=self.format,buffer_size=1024*1024*10)
         while self.running:
             try:
-                with self.lock:
-                    for frame in self.container.decode(video=0):
-                        image=frame.to_ndarray(format='rgb24')
-                        height, width, _ = image.shape
-                        bytes_per_line = 3 * width
-                        q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
-                        # Convert QImage to QPixmap
-                        pixmap = QPixmap.fromImage(q_img)
-                        self.frames.put(pixmap)
-                        self.frame_decoded.emit()
-                        if not self.running:
-                            print("decode thread exit")
-                            return
+            
+                for frame in self.container.decode(video=0):
+                    image=frame.to_ndarray(format='rgb24')
+                    height, width, _ = image.shape
+                    bytes_per_line = 3 * width
+                    q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
+                    # Convert QImage to QPixmap
+                    pixmap = QPixmap.fromImage(q_img)
+                    self.frames.put(pixmap)
+                    self.frame_decoded.emit()
+                    if not self.running:
+                        print("video decode thread exit")
+                        return
             except Exception as e:
                 pass
         self.stream.close()
         self.container.close()
+        print("video decode thread exit")
         
 class H264Encoder(QObject):
     frame_encoded = pyqtSignal()
