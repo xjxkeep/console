@@ -71,6 +71,7 @@ class MainWindow(FluentWindow):
         # self.client.start()
     
     def __handle_param_changed(self,param:dict):
+        print("param changed",param)
         self.quic_client.change_video_format(param.get("video_format","h264"))
         self.mqtt_client.update_video_setting_sync(param.get("resolution","高清"),param.get("video_format","h264"))
         
@@ -91,7 +92,10 @@ class MainWindow(FluentWindow):
                 "insecure":True,
                 "source_device_id":1,
                 "channel_count":10,
-                "device_id":1
+                "device_id":1,
+                "mqtt_port":1883,
+                "mqtt_setting_topic":"demo/aiomqtt",
+                "mqtt_host":"test.mosquitto.org",
             }
     
     def quic_client_connected(self):

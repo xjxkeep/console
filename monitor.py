@@ -42,8 +42,8 @@ class StatusBar(QWidget):
         self.battery=TransparentPushButton(QIcon("assets/svg/battery-full.svg"),"100%")
         channel_menu = RoundMenu(parent=self)
         channel_menu.addActions([
-            Action('线路: 上海'),
-            Action('线路: 北京'),
+            Action('上海'),
+            Action('北京'),
         ])
         self.channel.setMenu(channel_menu)
         channel_menu.triggered.connect(self.__handle_channel_menu_triggered)
@@ -81,6 +81,7 @@ class StatusBar(QWidget):
         layout.addWidget(self.download)
 
         layout.addWidget(self.video_format)
+        layout.addWidget(self.resolution)
         layout.addWidget(self.channel)
         layout.addWidget(self.fps)
         layout.addWidget(self.date)

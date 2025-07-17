@@ -1,83 +1,48 @@
 import asyncio
-from aiomqtt import Client
+import paho.mqtt.client as mqtt
 from PyQt5.QtCore import QObject,pyqtSignal
 import threading
 from protocol.video_pb2 import VideoAttributeMessage
 import time
-class MQTTClient(QObject):
+from queue import Queue
+class MQTTClient:
     def __init__(self,setting:dict):
-        
-        super().__init__()
         self.setting=setting
         self.host=setting.get("mqtt_host","test.mosquitto.org")
         self.port=setting.get("mqtt_port",1883)
         self.setting_topic=setting.get("mqtt_setting_topic","demo/aiomqtt")
         self.running=False
-        self.client=None
-        
-        
-    
-    
+        self.client=mqtt.Client()
+        self.fifo=Queue()    
+        self.thread=None
+        # 用于退出线程的特殊标记
+        self._stop_sentinel = object()
+
     def start(self):
-        """Start the client in a new thread"""
-        if self.running:
-            return
-        print("mqtt start")
-        self.running = True
-        self.loop = asyncio.new_event_loop()
-        
-        # Start event loop in new thread
-        self.run_thread= threading.Thread(
-            target=self._run_event_loop,
-            daemon=True
-        )
-        self.run_thread.start()
-    
-    async def run(self):
+        self.running=True
+        self.thread=threading.Thread(target=self.__run)
+        self.thread.start()
+
+    def __run(self):
+        self.client.connect(self.host,self.port,60)
+        print("mqtt client loop start")
+        self.client.loop_start()
+        self.client.on_connect=self.__on_connect
         while self.running:
             try:
-                async with Client(self.host,self.port) as client:
-                    self.client=client
-                    print("mqtt connected",self.client)
-                    while self.running:
-                        await asyncio.sleep(1)
-            except Exception as e:
-                print(e)
-                await asyncio.sleep(1)
+                message=self.fifo.get(timeout=1)  # 添加超时，避免永久阻塞
+                if message is self._stop_sentinel:
+                    break  # 收到退出信号，退出循环
+                print(self.setting_topic,"publish  video setting",message)
+                self.client.publish(self.setting_topic, message, qos=1)
+            except:
+                # 超时或其他异常，继续循环检查running状态
+                continue
 
-            
-            
-        
-    def _run_event_loop(self):
-        """Run the event loop in a separate thread"""
-        asyncio.set_event_loop(self.loop)
-        try:
-            
-            self.loop.run_until_complete(self.run())
-            self.loop.run_forever()
-        except Exception as e:
-            print(e)
-        finally:
-            self.loop.close()
+    def __on_connect(self,client,userdata,flags,rc):
+        print("connected to mqtt server")
     
-    async def update_video_setting(self,resolution,video_encode_type):
-        video_setting=VideoAttributeMessage()
-        if resolution=="高清":
-            video_setting.width=1920
-            video_setting.height=1080
-        elif resolution=="标清":
-            video_setting.width=1280
-            video_setting.height=720
-        elif resolution=="流畅":
-            video_setting.width=640
-            video_setting.height=360
-        else:
-            return
-        video_setting.max_rate=10000000
-        video_setting.frame_rate=30
-        video_setting.video_encode_type=video_encode_type
-        await self.client.publish(self.setting_topic, video_setting.SerializeToString(), qos=1)
-    
+
     def update_video_setting_sync(self,resolution,video_encode_type):
         if self.client is None:
             return
@@ -96,23 +61,16 @@ class MQTTClient(QObject):
         video_setting.max_rate=10000000
         video_setting.frame_rate=30
         video_setting.video_encode_type=video_encode_type
-        print(self.setting_topic,"publish  video setting",video_setting)
-        result=asyncio.run_coroutine_threadsafe(self.client.publish(self.setting_topic, video_setting.SerializeToString(), qos=1),self.loop)
-        print("publish result",result.result())
+        self.fifo.put(video_setting.SerializeToString())
         
     def close(self):
         self.running=False
-        if self.loop is not None:
-            self.loop.call_soon_threadsafe(self.loop.stop)
-        self.run_thread.join()
+        # 发送退出信号到队列，唤醒被阻塞的线程
+        self.fifo.put(self._stop_sentinel)
         if self.client is not None:
-            self.client.close()
-        self.client=None
-        self.loop=None
-        self.run_thread=None
-        self.setting["mqtt_host"]=self.host
-        self.setting["mqtt_port"]=self.port
-        self.setting["mqtt_setting_topic"]=self.setting_topic
+            self.client.disconnect()
+        if self.thread is not None:
+            self.thread.join()
        
         
         
@@ -120,8 +78,8 @@ class MQTTClient(QObject):
 
 
 if __name__ == "__main__":
-    async def publish_once():
-        async with Client("test.mosquitto.org") as client:  # 默认端口 1883
-            await client.publish("demo/aiomqtt", "Hello from aiomqtt!", qos=1)
-        print(">>> 消息已发布")
-    asyncio.run(publish_once())
+    # 测试代码
+    client = MQTTClient({"mqtt_host": "test.mosquitto.org"})
+    client.start()
+    time.sleep(2)
+    client.close()
