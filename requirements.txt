@@ -10,3 +10,4 @@ qrcode
 pyaudio
 numpy
 pyav
+aiomqtt

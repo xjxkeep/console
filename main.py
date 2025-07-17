@@ -9,7 +9,7 @@ import sys
 from PyQt5.QtWidgets import QApplication
 from qfluentwidgets.window import FluentWindow
 from qfluentwidgets.common import FluentIcon
-
+from pkg.mqtt import MQTTClient
 from pkg.quic import HighwayQuicClient
 from protocol.highway_pb2 import Device
 import json
@@ -46,27 +46,37 @@ class MainWindow(FluentWindow):
         super().__init__()
         self.load_setting()
         self.setupUi()
-        self.client=HighwayQuicClient(self.setting)
+        self.quic_client=HighwayQuicClient(self.setting)
     
-        self.client.upload_speed.connect(self.monitor.update_upload_speed)
-        self.client.download_speed.connect(self.monitor.update_download_speed)
-        self.client.connected.connect(self.quic_client_connected)
-        self.client.connection_error.connect(self.quic_client_connection_error)
-        self.client.receive_video.connect(self.update_monitor)
-        self.client.latency.connect(self.monitor.update_latency)
-        self.client.input_wave_data.connect(self.monitor.update_wave_form)  
+        self.quic_client.upload_speed.connect(self.monitor.update_upload_speed)
+        self.quic_client.download_speed.connect(self.monitor.update_download_speed)
+        self.quic_client.connected.connect(self.quic_client_connected)
+        self.quic_client.connection_error.connect(self.quic_client_connection_error)
+        self.quic_client.receive_video.connect(self.update_monitor)
+        self.quic_client.latency.connect(self.monitor.update_latency)
+        self.quic_client.input_wave_data.connect(self.monitor.update_wave_form)  
         
+        
+        
+        self.mqtt_client=MQTTClient(self.setting)
         # controller 发送控制消息
-        self.controller.controlMessage.connect(self.client.send_control_message)
-        self.monitor.startSignal.connect(self.client.start)
-        self.monitor.sendTestVideoSignal.connect(self.client.send_video_test)
-        self.monitor.video_format_changed.connect(self.client.change_video_format)
+        self.controller.controlMessage.connect(self.quic_client.send_control_message)
+        self.monitor.startSignal.connect(self.quic_client.start)
+        self.monitor.startSignal.connect(self.mqtt_client.start)
+        self.monitor.sendTestVideoSignal.connect(self.quic_client.send_video_test)
+        self.monitor.param_changed.connect(self.__handle_param_changed)
         # debug 发送文件 更新进度
-        self.debug.uploader.fileToSend.connect(self.client.send_file)
-        self.client.file_send_progress.connect(self.debug.uploader.updateProgress)
+        self.debug.uploader.fileToSend.connect(self.quic_client.send_file)
+        self.quic_client.file_send_progress.connect(self.debug.uploader.updateProgress)
         # self.client.start()
+    
+    def __handle_param_changed(self,param:dict):
+        self.quic_client.change_video_format(param.get("video_format","h264"))
+        self.mqtt_client.update_video_setting_sync(param.get("resolution","高清"),param.get("video_format","h264"))
+        
+        
     def update_monitor(self):
-        pixmap=self.client.decoder.get_frame()
+        pixmap=self.quic_client.decoder.get_frame()
         self.monitor.setPixmap(pixmap)
     
     def load_setting(self):
@@ -92,7 +102,8 @@ class MainWindow(FluentWindow):
         
     def closeEvent(self, a0: QCloseEvent | None) -> None:
         print("mainwindow closeEvent")    
-        self.client.close()
+        self.quic_client.close()
+        self.mqtt_client.close()
         print("client closed")    
         self.controller.close()
         print("controller closed")

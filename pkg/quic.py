@@ -106,7 +106,8 @@ class HighwayQuicClient(QObject):
         
     
     def change_video_format(self,format):
-        self.decoder.change_format(format)
+        if format!=self.decoder.format:
+            self.decoder.change_format(format)
 
     def reconnect_video_stream(self):
         print("reconnect video stream")

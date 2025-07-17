@@ -12,7 +12,7 @@ import threading
 from view.wave import WaveformWidget
 import numpy as np
 class StatusBar(QWidget):
-    video_format_changed=pyqtSignal(str)
+    param_changed=pyqtSignal(dict)
     def update(self):
         self.date.setText(datetime.now().strftime("%Y/%m/%d %H:%M:%S"))
     
@@ -37,24 +37,35 @@ class StatusBar(QWidget):
         self.fps=TransparentPushButton(FluentIcon.VIDEO.icon(),"30 fps")
         self.date=TransparentPushButton(FluentIcon.DATE_TIME.icon(),"2025/02/09 21:44:00")
         self.channel=TransparentDropDownPushButton(FluentIcon.IOT.icon(),"线路: 上海")
+        self.resolution=TransparentDropDownPushButton(FluentIcon.VIDEO.icon(),"清晰度: 高清")
         self.video_format=TransparentDropDownPushButton(FluentIcon.VIDEO.icon(),"视频格式: h264")
         self.battery=TransparentPushButton(QIcon("assets/svg/battery-full.svg"),"100%")
-        menu = RoundMenu(parent=self)
-        menu.addActions([
+        channel_menu = RoundMenu(parent=self)
+        channel_menu.addActions([
             Action('线路: 上海'),
             Action('线路: 北京'),
         ])
-        self.channel.setMenu(menu)
-        menu.triggered.connect(self.__handle_menu_triggered)
+        self.channel.setMenu(channel_menu)
+        channel_menu.triggered.connect(self.__handle_channel_menu_triggered)
 
 
-        menu=RoundMenu(parent=self)
-        menu.addActions([
+        video_format_menu=RoundMenu(parent=self)
+        video_format_menu.addActions([
             Action('h264'),
             Action('hevc'),
         ])
-        self.video_format.setMenu(menu)
-        menu.triggered.connect(self.__handle_video_format_menu_triggered)
+        self.video_format.setMenu(video_format_menu)
+        video_format_menu.triggered.connect(self.__handle_video_format_menu_triggered)
+
+
+        resolution_menu=RoundMenu(parent=self)
+        resolution_menu.addActions([
+            Action('高清'),
+            Action('标清'),
+            Action('流畅'),
+        ])
+        self.resolution.setMenu(resolution_menu)
+        resolution_menu.triggered.connect(self.__handle_resolution_menu_triggered)
 
         self.timer=QTimer(self)
         self.timer.setInterval(1000)
@@ -80,14 +91,26 @@ class StatusBar(QWidget):
         self.setFixedHeight(50)
         self.setStyleSheet("background-color: rgb(255,0,0)")
 
-    def __handle_menu_triggered(self,action:Action):
-        print(action.text())
+    def __handel_setting_changed(self):
+         self.param_changed.emit({
+            "resolution":self.resolution.text().split(":")[1].strip(),
+            "video_format":self.video_format.text().split(":")[1].strip(),
+            "channel":self.channel.text().split(":")[1].strip(),
+        })
     
+    def __handle_channel_menu_triggered(self,action:Action):
+        print(action.text())
+        self.channel.setText("线路: "+action.text())
+        self.__handel_setting_changed()
 
     def __handle_video_format_menu_triggered(self,action:Action):
         print(action.text())
-        self.video_format_changed.emit(action.text())
         self.video_format.setText("视频格式: "+action.text())
+        self.__handel_setting_changed()
+    def __handle_resolution_menu_triggered(self,action:Action):
+        print(action.text())
+        self.resolution.setText("清晰度: "+action.text())
+        self.__handel_setting_changed()
     def __init__(self):
         super().__init__()
         self.setupUi()
@@ -97,7 +120,7 @@ class Monitor(QWidget):
     # TODO 视频解码卡顿
     startSignal=pyqtSignal()
     sendTestVideoSignal=pyqtSignal()
-    video_format_changed=pyqtSignal(str)
+    param_changed=pyqtSignal(dict)
     def setupUi(self):
         self.setObjectName("Monitor")
         self.resize(800,600)
@@ -143,7 +166,7 @@ class Monitor(QWidget):
         self.timer.start()
         self.decoder=H264Decoder()
         self.latency=0
-        self.statusBar.video_format_changed.connect(self.video_format_changed.emit)
+        self.statusBar.param_changed.connect(self.param_changed)
     
     def update_wave_form(self,value:np.ndarray):
         print("update_wave_form",len(value))
