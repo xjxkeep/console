@@ -14,7 +14,7 @@ import time
 import threading
 from asyncio import Queue
 import os
-from pkg.audio import AudioEncoder,AudioPlayer
+from pkg.audio import AudioRecorder,AudioPlayer
 import numpy as np
 def generate_crc8_table():
     crc8_table = [0] * 256
@@ -99,7 +99,7 @@ class HighwayQuicClient(QObject):
         self.video_encoder=H264Encoder()
         self.video_encoder.frame_encoded.connect(self.send_video_test_data)
         
-        self.audio_encoder=AudioEncoder(format="g726")
+        self.audio_encoder=AudioRecorder(format="g726")
         self.audio_player=AudioPlayer(format="g726")
         
         self.tasks: List[asyncio.Task] = []
@@ -269,6 +269,9 @@ class HighwayQuicClient(QObject):
             if not task.done():
                 task.cancel()
         self.tasks=[]
+        self.audio_encoder.close()
+        self.audio_player.close()
+        
     
     async def run(self):
         """Establish QUIC connection"""
@@ -294,6 +297,8 @@ class HighwayQuicClient(QObject):
                     self.tasks.append(self.loop.create_task(self.establish_control_stream()))
                     self.tasks.append(self.loop.create_task(self.establish_file_stream()))
                     self.tasks.append(self.loop.create_task(self.establish_audio_stream()))
+                    self.audio_encoder.start()
+                    self.audio_player.start()
                     # Keep connection alive
                     while self.running:
                         # Check if client is still connected
@@ -307,6 +312,7 @@ class HighwayQuicClient(QObject):
                     self.client.close()
                     await self.client.wait_closed()
                 self.clear_tasks()
+                
                 print("tasks cleared!")
 
         
@@ -392,7 +398,7 @@ class HighwayQuicClient(QObject):
         print("__send_audio_stream starting to send data")
         try:
             while self.running:
-                data=await self.audio_encoder.read_frame_async()
+                data=await self.audio_encoder.read_async()
                 if len(data) == 0:
                     await asyncio.sleep(0.01)  # 短暂等待避免忙等待
                     continue

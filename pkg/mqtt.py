@@ -24,20 +24,26 @@ class MQTTClient:
         self.thread.start()
 
     def __run(self):
-        self.client.connect(self.host,self.port,60)
-        print("mqtt client loop start")
-        self.client.loop_start()
-        self.client.on_connect=self.__on_connect
-        while self.running:
+        while not self.running:
             try:
-                message=self.fifo.get(timeout=1)  # 添加超时，避免永久阻塞
-                if message is self._stop_sentinel:
-                    break  # 收到退出信号，退出循环
-                print(self.setting_topic,"publish  video setting",message)
-                self.client.publish(self.setting_topic, message, qos=1)
-            except:
-                # 超时或其他异常，继续循环检查running状态
+                self.client.connect(self.host,self.port,60)
+                print("mqtt client loop start")
+                self.client.loop_start()
+                self.client.on_connect=self.__on_connect
+            except Exception as e:
+                print("mqtt client connect error",e)
+                time.sleep(1)
                 continue
+            while self.running:
+                try:
+                    message=self.fifo.get(timeout=1)  # 添加超时，避免永久阻塞
+                    if message is self._stop_sentinel:
+                        break  # 收到退出信号，退出循环
+                    print(self.setting_topic,"publish  video setting",message)
+                    self.client.publish(self.setting_topic, message, qos=1)
+                except:
+                    # 超时或其他异常，继续循环检查running状态
+                    continue
 
     def __on_connect(self,client,userdata,flags,rc):
         print("connected to mqtt server")
