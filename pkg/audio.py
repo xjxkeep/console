@@ -54,7 +54,6 @@ class AudioRecorder:
             return
         self.running=False
         self.buffer.close()
-        self.ai.stop_stream()
         self.ai.close()
         self.p.terminate()
         if self.thread:
@@ -103,7 +102,6 @@ class AudioPlayer:
             return
         self.running=False
         self.reader.close() 
-        self.ao.stop_stream()
         self.ao.close()
         self.p.terminate()
         if self.thread:

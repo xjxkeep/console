@@ -24,10 +24,10 @@ class MQTTClient:
         self.thread.start()
 
     def __run(self):
-        while not self.running:
+        while self.running:
             try:
-                self.client.connect(self.host,self.port,60)
                 print("mqtt client loop start")
+                self.client.connect(self.host,self.port,60)
                 self.client.loop_start()
                 self.client.on_connect=self.__on_connect
             except Exception as e:
