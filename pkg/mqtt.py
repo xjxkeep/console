@@ -8,8 +8,8 @@ from queue import Queue
 class MQTTClient:
     def __init__(self,setting:dict):
         self.setting=setting
-        self.host=setting.get("mqtt_host","test.mosquitto.org")
-        self.port=setting.get("mqtt_port",1883)
+        self.host=setting.get("mqtt_host","stream.api.andless.tech")
+        self.port=setting.get("mqtt_port",31883)
         self.setting_topic=setting.get("mqtt_setting_topic","demo/aiomqtt")
         self.running=False
         self.client=mqtt.Client()

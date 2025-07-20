@@ -87,15 +87,15 @@ class MainWindow(FluentWindow):
             print("load setting:",self.setting)
         else:
             self.setting = {
-                "host":"127.0.0.1",
+                "host":"stream.api.andless.tech",
                 "port":30042,
                 "insecure":True,
                 "source_device_id":1,
                 "channel_count":10,
                 "device_id":1,
-                "mqtt_port":1883,
+                "mqtt_port":31883,
                 "mqtt_setting_topic":"demo/aiomqtt",
-                "mqtt_host":"test.mosquitto.org",
+                "mqtt_host":"stream.api.andless.tech",
             }
     
     def quic_client_connected(self):
