@@ -70,13 +70,15 @@ class MQTTClient:
         self.fifo.put(video_setting.SerializeToString())
         
     def close(self):
+        print("mqtt client close")
         self.running=False
         # 发送退出信号到队列，唤醒被阻塞的线程
-        self.fifo.put(self._stop_sentinel)
+        self.fifo.put_nowait(self._stop_sentinel)
         if self.client is not None:
             self.client.disconnect()
         if self.thread is not None:
             self.thread.join()
+        print("mqtt client close end")
        
         
         

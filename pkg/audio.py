@@ -90,12 +90,13 @@ class AudioPlayer:
         for frame in container.decode(stream):
             pcm=frame.to_ndarray()
             pcm=np.clip(pcm*self.scale, -32768, 32767)
-            self.ao.write(pcm.tobytes())
+            if self.running:
+                self.ao.write(pcm.tobytes())
+            else:
+                break
         container.close()
         self.ao.close()
         self.p.terminate()
-        if self.thread:
-            self.thread.join()
     
     def close(self):
         if not self.running:

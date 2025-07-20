@@ -106,14 +106,15 @@ class MainWindow(FluentWindow):
         
     def closeEvent(self, a0: QCloseEvent | None) -> None:
         print("mainwindow closeEvent")    
+        print(self.setting)
+        with open("setting.json", "w") as f:
+            json.dump(self.setting, f)
         self.quic_client.close()
         self.mqtt_client.close()
         print("client closed")    
         self.controller.close()
         print("controller closed")
-        print(self.setting)
-        with open("setting.json", "w") as f:
-            json.dump(self.setting, f)
+        
         return super().closeEvent(a0)
 
 app=QApplication(sys.argv)
