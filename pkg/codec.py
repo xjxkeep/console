@@ -17,6 +17,12 @@ class H264Decoder(QObject):
     frame_decoded = pyqtSignal()
     def __init__(self,format='h264'):
         super().__init__()
+        self.transform_map={
+            "H.264":"h264",
+            "H.265":"hevc",
+            "h264":"h264",
+            "hevc":"hevc",
+        }
         self.stream=BufferStream()
         self.frames=Queue()
         self.format=format
@@ -24,6 +30,7 @@ class H264Decoder(QObject):
         self.decode_thread.start()
         self.has_data = False
         self.running = True
+        
 
     def close(self):
         self.running = False
@@ -51,8 +58,8 @@ class H264Decoder(QObject):
     
     
     def __decode_frames(self):
-        print("start decode video with format",self.format)
-        self.container = av.open(self.stream,format=self.format,buffer_size=1024*1024*10)
+        print("start decode video with format",self.transform_map[self.format])
+        self.container = av.open(self.stream,format=self.transform_map[self.format],buffer_size=1024*1024*10)
         
         while self.running:
             try:

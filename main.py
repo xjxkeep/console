@@ -72,8 +72,8 @@ class MainWindow(FluentWindow):
     
     def __handle_param_changed(self,param:dict):
         print("param changed",param)
-        self.quic_client.change_video_format(param.get("video_format","h264"))
-        self.mqtt_client.update_video_setting_sync(param.get("resolution","高清"),param.get("video_format","h264"))
+        self.quic_client.change_video_format(param.get("video_format","H.264"))
+        self.mqtt_client.update_video_setting_sync(param.get("resolution","高清"),param.get("video_format","H.264"))
         
         
     def update_monitor(self):

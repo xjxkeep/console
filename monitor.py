@@ -38,7 +38,7 @@ class StatusBar(QWidget):
         self.date=TransparentPushButton(FluentIcon.DATE_TIME.icon(),"2025/02/09 21:44:00")
         self.channel=TransparentDropDownPushButton(FluentIcon.IOT.icon(),"线路: 上海")
         self.resolution=TransparentDropDownPushButton(FluentIcon.VIDEO.icon(),"清晰度: 高清")
-        self.video_format=TransparentDropDownPushButton(FluentIcon.VIDEO.icon(),"视频格式: h264")
+        self.video_format=TransparentDropDownPushButton(FluentIcon.VIDEO.icon(),"视频格式: H.264")
         self.battery=TransparentPushButton(QIcon("assets/svg/battery-full.svg"),"100%")
         channel_menu = RoundMenu(parent=self)
         channel_menu.addActions([
@@ -51,8 +51,8 @@ class StatusBar(QWidget):
 
         video_format_menu=RoundMenu(parent=self)
         video_format_menu.addActions([
-            Action('h264'),
-            Action('hevc'),
+            Action('H.264'),
+            Action('H.265'),
         ])
         self.video_format.setMenu(video_format_menu)
         video_format_menu.triggered.connect(self.__handle_video_format_menu_triggered)
