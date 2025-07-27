@@ -5,9 +5,10 @@ from pkg.buffer import RingBytesIO,BufferStream
 import threading
 
 class AudioRecorder:
-    def __init__(self,scale=1,format="g726"):
-        self.buffer=BufferStream()
+    def __init__(self,scale=1,format="g726",frame_size=1024):
+        self.buffer=BufferStream(maxSize=1)
         self.p=pyaudio.PyAudio()
+        self.frame_size=frame_size
         self.ai=self.p.open(format=pyaudio.paInt16, channels=1, rate=8000, input=True,start=False)
         self.running=False
         self.scale=1
@@ -29,14 +30,14 @@ class AudioRecorder:
         return await self.buffer.read_single_async()
 
     def __run(self):
-        container=av.open(self.buffer,"w",format=self.format)
+        container=av.open(self.buffer,"w",format=self.format,buffer_size=self.frame_size)
         stream=container.add_stream(self.format,rate=8000)
         assert isinstance(stream,av.AudioStream)
         stream.layout="mono"
         stream.bit_rate=32000
         pts = 0
         while self.running:
-            pcm=self.ai.read(1024)
+            pcm=self.ai.read(self.frame_size)
             pcm=np.frombuffer(pcm,dtype=np.int16)
             pcm=np.clip(pcm*self.scale, -32768, 32767)
             frame=av.AudioFrame(samples=len(pcm)).from_ndarray(pcm.reshape(1, -1),format="s16",layout="mono")
@@ -54,21 +55,18 @@ class AudioRecorder:
             return
         self.running=False
         self.buffer.close()
-        self.ai.close()
-        self.p.terminate()
         if self.thread:
             self.thread.join()
-
 class AudioPlayer:
-    def __init__(self,format="g726",scale=1):
-        self.reader=BufferStream()
+    def __init__(self,format="g726",scale=1,frame_size=1024):
+        self.reader=BufferStream(maxSize=1)
         self.p=pyaudio.PyAudio()
         self.ao=self.p.open(format=pyaudio.paInt16, channels=1, rate=8000, output=True,start=False)
         self.running=False
         self.format=format
         self.scale=scale
         self.thread=None
-
+        self.frame_size=frame_size
     def start(self):
         if self.running:
             return
@@ -82,7 +80,7 @@ class AudioPlayer:
 
 
     def __run(self):
-        container=av.open(self.reader,"r",format=self.format)
+        container=av.open(self.reader,"r",format=self.format,buffer_size=self.frame_size)
         stream = container.streams.audio[0]
         assert isinstance(stream,av.AudioStream)
         stream.layout="mono"
@@ -90,10 +88,9 @@ class AudioPlayer:
         for frame in container.decode(stream):
             pcm=frame.to_ndarray()
             pcm=np.clip(pcm*self.scale, -32768, 32767)
-            if self.running:
-                self.ao.write(pcm.tobytes())
-            else:
-                break
+            if not self.running: break
+            self.ao.write(pcm.tobytes())
+           
         container.close()
         self.ao.close()
         self.p.terminate()
@@ -102,8 +99,6 @@ class AudioPlayer:
         if not self.running:
             return
         self.running=False
-        self.reader.close() 
-        self.ao.close()
-        self.p.terminate()
+        self.reader.close()
         if self.thread:
             self.thread.join()

@@ -71,7 +71,6 @@ class BufferStream:
             self.buffer.append(data)
             self.buffer_size+=1
             if self.maxSize>0 and self.buffer_size>self.maxSize:
-                print("fifo full")
                 self.buffer.popleft()
                 self.buffer_size-=1
             else:
@@ -98,7 +97,7 @@ class BufferStream:
     
     def close(self):
         self.running = False
-        self.semaphore.release(10)
+        self.semaphore.release(1024)
         self.buffer.clear()
 
 class RingBytesIO:
@@ -139,6 +138,6 @@ class RingBytesIO:
             return len(data)
     def close(self):
         self.running = False
-        self.semaphore.release(10)
+        self.semaphore.release(1024)
         self.buffer.close()
 

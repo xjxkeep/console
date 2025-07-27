@@ -3,10 +3,11 @@ import pyaudio
 import numpy as np
 from pkg.buffer import RingBytesIO,BufferStream
 import threading
+from queue import Queue
 
 class AudioRecorder:
     def __init__(self,scale=1,format="g726"):
-        self.buffer=BufferStream()
+        self.buffer=BufferStream(maxSize=1)
         self.p=pyaudio.PyAudio()
         self.ai=self.p.open(format=pyaudio.paInt16, channels=1, rate=8000, input=True,start=False)
         self.running=False
@@ -21,9 +22,9 @@ class AudioRecorder:
         self.thread.start()
 
     def read(self,n):
-
+        t=time.time()
         data=self.buffer.read(n)
-        print("want read",n,"get",len(data))
+        print("want read",n,"get",len(data),"cost",time.time()-t,"buffer size:",self.buffer.size())
         return  data
 
     def __run(self):
@@ -71,10 +72,8 @@ class AudioPlayer:
         self.thread=threading.Thread(target=self.__run,daemon=True)
         self.thread.start()
 
-
-
     def __run(self):
-        container=av.open(self.reader,"r",format=self.format)
+        container=av.open(self.reader,"r",format=self.format,buffer_size=1024)
         stream = container.streams.audio[0]
         assert isinstance(stream,av.AudioStream)
         stream.layout="mono"
@@ -86,16 +85,15 @@ class AudioPlayer:
         container.close()
         self.ao.close()
         self.p.terminate()
-        if self.thread:
-            self.thread.join()
+    
     
     def close(self):
         self.running=False
+        if self.thread:
+            self.thread.join()
         self.ao.stop_stream()
         self.ao.close()
         self.p.terminate()
-        if self.thread:
-            self.thread.join()
 def g276_dec_ao_test():
     p = pyaudio.PyAudio()
     ao = p.open(format=pyaudio.paInt16, channels=1, rate=8000, output=True)
