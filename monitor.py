@@ -1,5 +1,5 @@
 from PyQt5.QtCore import Qt,pyqtSignal
-from qfluentwidgets import FluentIcon,FluentIconBase,TransparentPushButton,TransparentToolButton,TransparentDropDownPushButton,RoundMenu,Action
+from qfluentwidgets import FluentIcon,FluentIconBase,TransparentPushButton,TransparentToolButton,TransparentDropDownPushButton,RoundMenu,Action,PushButton  
 from PyQt5.QtGui import QCloseEvent, QIcon,QColor,QImage,QPixmap
 from PyQt5.QtCore import Qt,QTimer
 from PyQt5.QtWidgets import *
@@ -138,11 +138,11 @@ class Monitor(QWidget):
         self.waveform=WaveformWidget()
         layout.addWidget(self.waveform)
         
-        self.testButton=QPushButton("测试本地视频解码")
+        self.testButton=PushButton("测试本地视频解码")
         self.testButton.clicked.connect(self.test)
-        self.startButton=QPushButton("连接服务器")
+        self.startButton=PushButton("连接服务器")
         self.startButton.clicked.connect(self.startSignal.emit)
-        self.sendTestVideoButton=QPushButton("发送摄像头视频")
+        self.sendTestVideoButton=PushButton("发送摄像头视频")
         self.sendTestVideoButton.clicked.connect(self.sendTestVideoSignal.emit)
         layout.addWidget(self.testButton)
         layout.addWidget(self.startButton)
