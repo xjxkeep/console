@@ -8,6 +8,7 @@ from pkg.joystick import JoyStick
 import threading
 
 class GuideButtonGroup(QWidget):
+    prevClicked=pyqtSignal()
     nextClicked=pyqtSignal()
     skipClicked=pyqtSignal()
     def setupUi(self):
@@ -19,10 +20,13 @@ class GuideButtonGroup(QWidget):
         
         self.nextButton=PrimaryPushButton("下一步")
         self.skipButton=PushButton("跳过")
+        self.label=BodyLabel("1/3",self)
+        
         layout.addWidget(self.skipButton)
         layout.addWidget(self.nextButton)
-        
+        layout.addWidget(self.label)
         layout.addStretch()  # 右侧弹性空间
+        
         
         self.nextButton.clicked.connect(self.nextClicked)
         self.skipButton.clicked.connect(self.skipClicked)
@@ -32,37 +36,12 @@ class GuideButtonGroup(QWidget):
         super().__init__()
         self.setupUi()
     
+    def setText(self,text):
+        self.label.setText(text)
+    
 
-class StepGroup(QWidget):
-    def setupUi(self):
-        self.setObjectName("stepGroup")
-        layout=QVBoxLayout()
-        self.setLayout(layout)
-    def __init__(self,steps:list[QWidget]) -> None:
-        super().__init__()
-        self.setupUi()
-        self.steps=steps
-        self.currentStep=self.steps[0]
-        self.currentStepNum=0
-        self.layout().addWidget(self.currentStep)
     
-    def setStep(self,stepNum):
-        if self.currentStep:
-            self.layout().removeWidget(self.currentStep)
-        self.currentStep=self.steps[stepNum]
-        self.currentStepNum=stepNum
-        self.layout().addWidget(self.currentStep)
-    
-    def nextStep(self):
-        self.currentStepNum=(self.currentStepNum+1)%len(self.steps)
-        self.setStep(self.currentStepNum)
-    
-    def prevStep(self):
-        self.currentStepNum=(self.currentStepNum-1)
-        if self.currentStepNum<0:
-            self.currentStepNum=len(self.steps)-1
-        self.setStep(self.currentStepNum)
-
+        
 class WelcomeStep(QWidget):
     def setupUi(self):
         self.setObjectName("welcomeStep")
@@ -73,7 +52,7 @@ class WelcomeStep(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Expanding)
         
         self.titleLabel=TitleLabel("欢迎使用",self)
-        self.titleLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.titleLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)   
         
         # 标题使用Fixed策略，确保它保持在顶部
         self.titleLabel.setSizePolicy(QSizePolicy.Policy.Preferred,QSizePolicy.Policy.Fixed)
@@ -92,6 +71,8 @@ class WelcomeStep(QWidget):
         super().__init__()
         self.setupUi()
 
+
+
 class Guide(QWidget):
     def setupUi(self):
         self.setObjectName("guide")
@@ -108,17 +89,35 @@ class Guide(QWidget):
             PushButton("连接服务器"),
             PushButton("发送摄像头视频"),
         ]
-        self.stepGroup=StepGroup(self.steps)
+        self.stepGroup=QStackedWidget()
+        self.stepGroup.addWidget(self.steps[0])
+        self.stepGroup.addWidget(self.steps[1])
+        self.stepGroup.addWidget(self.steps[2])
+        self.stepGroup.addWidget(self.steps[3])
+        self.stepGroup.setCurrentIndex(0)
+
         
         self.buttonGroup=GuideButtonGroup()
+        self.buttonGroup.setText(f"1/{len(self.steps)}")
         self.buttonGroup.skipClicked.connect(self.close)
-        self.buttonGroup.nextClicked.connect(self.stepGroup.nextStep)
+        self.buttonGroup.nextClicked.connect(self.nextStep)
         # 按钮组使用Expanding策略，让它可以扩展
         self.buttonGroup.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Fixed)
         mainLayout.addWidget(self.stepGroup)
+        
         mainLayout.addWidget(self.buttonGroup)
         self.setLayout(mainLayout)
         
+    def nextStep(self):
+        index=self.stepGroup.currentIndex()
+        if index+1<len(self.steps):
+            self.stepGroup.setCurrentIndex(index+1)
+            self.buttonGroup.setText(f"{index+2}/{len(self.steps)}")
+            
+        if self.stepGroup.currentIndex()+1>=len(self.steps):
+            self.buttonGroup.nextButton.setText("完成")
+            self.buttonGroup.nextButton.clicked.connect(self.close)
+    
     def __init__(self) -> None:
         super().__init__()
         self.setupUi()
