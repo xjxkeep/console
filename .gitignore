@@ -18,3 +18,5 @@ build/
 *.wav
 *.aac
 *.h264
+application
+.setting.json

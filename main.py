@@ -5,12 +5,16 @@ from controller import Controller
 from debug import Debug
 from about import About
 from setting import SettingView
+from guide import Guide
 import sys
-from PyQt5.QtWidgets import QApplication
+from qfluentwidgets import Dialog
+from PyQt5.QtWidgets import QApplication,QDialog,QInputDialog
 from qfluentwidgets.window import FluentWindow
 from qfluentwidgets.common import FluentIcon
 from pkg.mqtt import MQTTClient
 from pkg.quic import HighwayQuicClient
+from pkg.api import API
+from pkg.version_manager import VersionManager
 from protocol.highway_pb2 import Device
 import json
 import os
@@ -44,8 +48,15 @@ class MainWindow(FluentWindow):
         
     def __init__(self):
         super().__init__()
+        
         self.load_setting()
         self.setupUi()
+        
+        # 初始化 API 实例
+        self.api = API(self.setting)
+        
+        self.version_manager=VersionManager(self.setting,self.api,self)
+        self.version_manager.check_update()
         self.quic_client=HighwayQuicClient(self.setting)
     
         self.quic_client.upload_speed.connect(self.monitor.update_upload_speed)
@@ -81,11 +92,12 @@ class MainWindow(FluentWindow):
         self.monitor.setPixmap(pixmap)
     
     def load_setting(self):
-        if os.path.exists("setting.json"):
-            with open("setting.json", "r") as f:
+        if os.path.exists(".setting.json"):
+            with open(".setting.json", "r") as f:
                 self.setting = json.load(f)
             print("load setting:",self.setting)
         else:
+            
             self.setting = {
                 "host":"stream.api.andless.tech",
                 "port":30042,
@@ -97,6 +109,9 @@ class MainWindow(FluentWindow):
                 "mqtt_setting_topic":"demo/aiomqtt",
                 "mqtt_host":"stream.api.andless.tech",
             }
+            self.guide=Guide(self)
+            self.guide.show()
+          
     
     def quic_client_connected(self):
         print("quic client connected")
@@ -107,7 +122,7 @@ class MainWindow(FluentWindow):
     def closeEvent(self, a0: QCloseEvent | None) -> None:
         print("mainwindow closeEvent")    
         print(self.setting)
-        with open("setting.json", "w") as f:
+        with open(".setting.json", "w") as f:
             json.dump(self.setting, f)
         self.quic_client.close()
         self.mqtt_client.close()

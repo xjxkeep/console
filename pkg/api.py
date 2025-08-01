@@ -3,31 +3,16 @@ import hashlib
 import base64
 import time
 import json
-from pydantic import BaseModel
-
-class Device(BaseModel):
-    ID :int =None
-    name: str = None
-    device_id: str = None
-    subscribe_id: str = None
-    register_ip: str = None
-    mac: str = None
-    version: str = None
-    token: str = None
-   
-
-class DeviceResponse(BaseModel):
-    code: int
-    msg: str
-    data: Device
+from pkg.model import Device,DeviceResponse,Version,VersionResponse
 
 class API:
     def __init__(self, setting: dict):
         self.base_url = setting.get("base_url", "http://localhost:8000")
         self.user_agent = setting.get("user_agent", "Python-Client/1.0")
-        self.token = setting.get("token", "123")
-        self.device_id = setting.get("device_id", "123")
-
+        self.token = setting.get("token", "0")
+        self.device_id = setting.get("device_id", "0")
+        self.arch = setting.get("arch", "x86_64")
+        
     def generate_sign(self, timestamp: int, path: str, payload: str = "") -> str:
         """
         生成签名
@@ -113,3 +98,10 @@ class API:
         response.raise_for_status()
         return True
     
+    
+    def check_version(self) -> Version:
+        path = f"/verify/checkVersion?arch={self.arch}"
+        response = self._make_request("GET", path)
+        response.raise_for_status()
+        response = VersionResponse.model_validate_json(json_data=response.content)
+        return response.data
