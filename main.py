@@ -18,6 +18,7 @@ from pkg.version_manager import VersionManager
 from protocol.highway_pb2 import Device
 import json
 import os
+from pkg.model import HIDBody
 # TODO
 # 1. 封装下请求的host 等参数 统一管理 后面host走下发
 # 2. 界面完善
@@ -84,6 +85,8 @@ class MainWindow(FluentWindow):
         # debug 发送文件 更新进度
         self.debug.uploader.fileToSend.connect(self.quic_client.send_file)
         self.quic_client.file_send_progress.connect(self.debug.uploader.updateProgress)
+
+        self.settingView.hid_response.connect(self._handle_hid_response)
         # self.client.start()
     
     def __handle_param_changed(self,param:dict):
@@ -96,6 +99,11 @@ class MainWindow(FluentWindow):
         pixmap=self.quic_client.decoder.get_frame()
         self.monitor.setPixmap(pixmap)
     
+    def _handle_hid_response(self,response:HIDBody):
+        print("hid response",response)
+        self.debug.setValue("source_device_id",response.returns["id"])
+        self.debug.setValue("device_id",response.returns["sub_id"])
+
     def load_setting(self):
         if os.path.exists(".setting.json"):
             with open(".setting.json", "r") as f:

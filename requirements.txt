@@ -11,3 +11,6 @@ pyaudio
 numpy
 pyav
 aiomqtt
+requests
+pydantic
+pyshortcuts

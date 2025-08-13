@@ -11,6 +11,8 @@ from PyQt5.QtGui import QPixmap
 from io import BytesIO
 from view.common import BLineEdit,TLineEdit
 import hid
+from pkg.hid_caller import HID
+from pkg.model import HIDBody
 class InfoItem(QWidget):
     def __init__(self,parent=None,label=None,info=None,secret=False):
         super().__init__(parent)
@@ -82,28 +84,39 @@ class QRCodeDisplay(QWidget):
 
 
 class HIDDebug(QGroupBox):
+    hid_response=pyqtSignal(HIDBody)
     def __init__(self,parent=None):
         super().__init__(parent)
         self.setupUi()
-        self.device=None
-        self.cond=threading.Condition()
-        self.cond.acquire()
-        self.readThread=threading.Thread(target=self.__read_hid,daemon=True)
-        self.readThread.start()
-        
+        self.hid=HID(0x2207,0x0019)
+        self.hid.connected.connect(self.__connected)
+        self.hid.disconnected.connect(self.__disconnected)
+        self.hid.data_received.connect(self.__data_received)
+    
+    def __connected(self):
+        self.content.append("连接成功")
+        self.startBut.setEnabled(True)
+    
+    def __disconnected(self):
+        self.content.append("连接失败")
+        self.startBut.setEnabled(True)
+    
+    def __data_received(self,data:HIDBody):
+        self.content.append("接收数据:" + " ".join([hex(x) for x in data]))
+
     def setupUi(self):
         self.setObjectName("HIDDebug")
         self.setLayout(QVBoxLayout())
         
-        self.vendorIdInput=TLineEdit("Vendor ID","123")
-        self.productIdInput=TLineEdit("Product ID","123")
-        self.startBut=PushButton("连接")
+        self.vendorIdInput=TLineEdit("Vendor ID","0x2207")
+        self.productIdInput=TLineEdit("Product ID","0x0019")
+        self.startBut=PushButton("发送请求")
         self.content=QTextEdit(self)
         self.content.setReadOnly(True)
         self.inputLine=BLineEdit(FluentIcon.SEND.icon(),parent=self)
         self.inputLine.but.clicked.connect(self.send)
         self.inputLine.setPlaceholderText("输入发送内容")
-        self.startBut.clicked.connect(self.connect)
+        self.startBut.clicked.connect(self.call_function)
         self.layout().addWidget(QLabel("HID 调试"))
         self.layout().addWidget(self.vendorIdInput)
         self.layout().addWidget(self.productIdInput)
@@ -113,43 +126,15 @@ class HIDDebug(QGroupBox):
         self.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
         
 
-    def connect(self):
-        self.startBut.setDisabled(True)
+    def call_function(self):
         try:
-            devices = hid.enumerate(int(self.vendorIdInput.text()), int(self.productIdInput.text()))
-            if devices:
-                self.content.append("连接成功")
-            else:
-                self.content.append("连接失败 未找到指定HID设备")
-                self.startBut.setEnabled(True)
+            response=self.hid.call_function("get_device_info",{})
+            self.hid_response.emit(response)
+            self.content.append("响应:" + str(response))
         except Exception as e:
-            self.content.append(str(e))
-            self.startBut.setEnabled(True)
-            return
-        for dev_info in devices:
-            if dev_info['usage_page'] == 0xff00 and dev_info['usage'] == 0x01:
-                device = hid.device()
-                device.open_path(dev_info['path'])
-                self.device=device
-                print(f"已连接: {dev_info['manufacturer_string']} {dev_info['product_string']}")
-                self.cond.release()
-                break
-        else:
-            print("未找到匹配的 HID 接口")
-            return
+            self.content.append("响应:" + str(e))
     
-    def __read_hid(self):
-        self.cond.acquire()
-        print("获取到hid device 开始数据读取线程")
-        self.device.set_nonblocking(False)
-        while True:
-            data=self.device.read(16)
-            if data:
-                self.content.append("接收数据:" + " ".join([hex(x) for x in data]))
-            else:
-                print("hid no data quit")
-                break
-        self.startBut.setEnabled(True)
+    
     
     def send(self):
         self.content.append(self.inputLine.text()+"\n")
@@ -180,6 +165,7 @@ class DeviceInfo(QGroupBox):
 
 
 class SettingView(QWidget):
+    hid_response=pyqtSignal(HIDBody)
     def __init__(self,parent=None):
         super().__init__(parent)
         self.setupUi()
@@ -189,6 +175,7 @@ class SettingView(QWidget):
         self.setLayout(QHBoxLayout())
         self.deviceInfo=DeviceInfo()
         self.hid=HIDDebug()
+        self.hid.hid_response.connect(self.hid_response)
         self.layout().addWidget(self.deviceInfo)
         self.layout().addWidget(self.hid)
         

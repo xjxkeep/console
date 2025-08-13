@@ -1,5 +1,5 @@
 from PyQt5.QtCore import QObject, pyqtSignal, QThread
-from model import HIDBody   
+from pkg.model import HIDBody   
 import uuid
 import hid
 import time
@@ -15,15 +15,17 @@ class HIDConnectionThread(QThread):
         super().__init__()
         self.vendor_id = vendor_id
         self.product_id = product_id
+        self.is_connected=False
         self.running = True
     
     def run(self):
         while self.running:
             try:
                 devices = hid.enumerate(int(self.vendor_id), int(self.product_id))
-                if devices:
+                if devices and not self.is_connected:
                     self.connected.emit()
-                else:
+                    self.is_connected=True
+                elif not devices and self.is_connected:
                     self.disconnected.emit()
                 time.sleep(1)
             except Exception as e:
@@ -41,13 +43,14 @@ class HIDDataReceiverThread(QThread):
         super().__init__()
         self.hid_device = hid_device
         self.running = True
+        self.frame_size=256
         self.buffer=bytearray()
     
     def run(self):
         while self.running and self.hid_device:
             try:
                 # 读取HID数据
-                data = self.hid_device.read(128, timeout_ms=100)
+                data = self.hid_device.read(self.frame_size, timeout_ms=100)
                 if data:
                     self.buffer.extend(data)
                     self.__parse_frame()
@@ -184,6 +187,7 @@ class HID(QObject):
         
         # 数据接收线程
         self.data_receiver_thread = None
+        self.frame_size=255
         
 
 
@@ -257,33 +261,31 @@ class HID(QObject):
             
             # 发送所有数据包
             for packet in packets:
-                self.hid_device.write(packet)
+                
+                self.hid_device.write(b'0'+packet)
                 # 可选：在包之间添加短暂延迟
                 time.sleep(0.001)
             
         except Exception as e:
             print(f"Failed to send HID request: {e}")
             raise
-
+    
     def _serialize_request_packets(self, request: HIDBody) -> list:
-        """序列化HIDRequest为多个128字节的数据包"""
+        """序列化HIDRequest为多个frame_size字节的数据包"""
         try:
             # 将HIDRequest转换为JSON字符串
-            import json
             json_str = request.model_dump_json()
             
             # 转换为字节数据
             data = json_str.encode('utf-8')
             
-            # 按照128字节分包
-            packet_size = 128
+            packet_size = self.frame_size
             packets = []
             
             # 分包处理
             for i in range(0, len(data), packet_size):
                 packet = bytearray(data[i:i + packet_size])
                 
-                # 如果包大小不足128字节，用0填充
                 while len(packet) < packet_size:
                     packet.append(0)
                 

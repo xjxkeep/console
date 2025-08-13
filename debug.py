@@ -71,7 +71,16 @@ class SettingItem(QWidget):
             self.valueEdit.textChanged.connect(self.__settingChanged)
         self.layout().addWidget(self.label)
         self.layout().addWidget(self.valueEdit)
-    
+
+    def setValue(self,value):
+        self.value=value
+        if isinstance(self.valueEdit, SwitchButton):
+            self.valueEdit.setChecked(value)
+        elif isinstance(self.valueEdit, (SpinBox, DoubleSpinBox)):
+            self.valueEdit.setValue(value)
+        else:
+            self.valueEdit.setText(value)
+
     def __init__(self,key:str,value):
         super().__init__()
         self.key=key
@@ -127,6 +136,11 @@ class Debug(ScrollArea):
         for key,value in setting.items():
             self.setting[key]=value
         self.settingChanged.emit(setting)
+
+
+    def setValue(self,key:str,value):
+        if key in self.settingItemMap:
+            self.settingItemMap[key].setValue(value)
 
     def getSetting(self,key=None):
         if key is None:
