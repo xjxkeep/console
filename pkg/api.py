@@ -5,12 +5,13 @@ import time
 import json
 from pkg.model import Device,DeviceResponse,Version,VersionResponse
 
+
 class API:
     def __init__(self, setting: dict):
-        self.base_url = setting.get("base_url", "http://localhost:8000")
+        self.base_url = setting.get("base_url", "http://139.224.218.82:30080")
         self.user_agent = setting.get("user_agent", "Python-Client/1.0")
         self.token = setting.get("token", "0")
-        self.device_id = setting.get("device_id", "0")
+        self.source_device_id = setting.get("source_device_id", "0")
         self.arch = setting.get("arch", "x86_64")
         
     def generate_sign(self, timestamp: int, path: str, payload: str = "") -> str:
@@ -67,13 +68,13 @@ class API:
         
         return response
 
-    def get_device_info(self, device_id: str) -> Device:
-        path = f"/verify/findDevice?device_id={device_id}"
+    def get_device_info(self) -> Device:
+        path = f"/verify/findDevice?device_id={self.source_device_id}"
         response = self._make_request("GET", path)
         response.raise_for_status()
         response = DeviceResponse.model_validate_json(json_data=response.content)
+        print("get_device_info response",response)
         device=response.data
-        self.token=device.token
         return device
     
     def create_device(self, name: str, mac: str, version: str, token: str) -> Device:

@@ -50,13 +50,18 @@ class MainWindow(FluentWindow):
         super().__init__()
         
         self.load_setting()
-        self.setupUi()
-        
         # 初始化 API 实例
         self.api = API(self.setting)
-        
+        self.device=self.api.get_device_info()
+        if self.device is not None: 
+            self.setting["source_device_id"]=self.device.device_id
+            self.setting["token"]=self.device.token
+            self.setting["device_id"]=self.device.subscribe_id
+            
+        self.setupUi() 
+            
         self.version_manager=VersionManager(self.setting,self.api,self)
-        self.version_manager.check_update()
+        # self.version_manager.check_update()
         self.quic_client=HighwayQuicClient(self.setting)
     
         self.quic_client.upload_speed.connect(self.monitor.update_upload_speed)
@@ -102,7 +107,7 @@ class MainWindow(FluentWindow):
                 "host":"stream.api.andless.tech",
                 "port":30042,
                 "insecure":True,
-                "source_device_id":1,
+                "source_device_id":"0",
                 "channel_count":10,
                 "device_id":1,
                 "mqtt_port":31883,
