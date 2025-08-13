@@ -1,5 +1,14 @@
 from pydantic import BaseModel
 
+
+
+class HIDBody(BaseModel):
+    type: str = ""
+    cmd: str = None
+    request_id: str = None
+    args: dict = {}
+    returns: dict = {}
+
 class Device(BaseModel):
     ID :int =None
     name: str = None
