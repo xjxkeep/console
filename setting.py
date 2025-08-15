@@ -35,6 +35,9 @@ class InfoItem(QWidget):
         layout.addWidget(self.but)
         self.setLayout(layout)
     
+    def setValue(self,value):
+        self.info.setText(value)
+
     def copy(self):
         clipboard = QApplication.clipboard()
         clipboard.setText(self.info.text())
@@ -51,7 +54,28 @@ class QRCodeDisplay(QWidget):
         super().__init__(parent)
         self.content=content
         self.setupUi()
-        
+    
+
+    def setContent(self,content):
+        self.content=content
+        if self.content:
+            qr = qrcode.QRCode(version=1, box_size=10, border=4)
+            qr.add_data(self.content)
+            qr.make(fit=True)
+
+            # Create QR code image
+            img = qr.make_image(fill_color="black", back_color="white")
+
+            # Convert PIL image to QPixmap
+            buffer = BytesIO()
+            img.save(buffer, format='PNG')
+            qr_pixmap = QPixmap()
+            qr_pixmap.loadFromData(buffer.getvalue())
+
+            # Scale pixmap to fit label
+            qr_pixmap = qr_pixmap.scaled(180, 180, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.qrcode.setPixmap(qr_pixmap)
+
     def setupUi(self):
         self.setObjectName("QRCodeDisplay")
         self.setFixedSize(200,200)
@@ -60,24 +84,7 @@ class QRCodeDisplay(QWidget):
         self.qrcode.setAlignment(Qt.AlignCenter)
         self.label=QLabel("扫描二维码绑定设备")
         self.label.setAlignment(Qt.AlignCenter)
-        if self.content:
-            qr = qrcode.QRCode(version=1, box_size=10, border=4)
-            qr.add_data(self.content)
-            qr.make(fit=True)
-            
-            # Create QR code image
-            img = qr.make_image(fill_color="black", back_color="white")
-            
-            # Convert PIL image to QPixmap
-            buffer = BytesIO()
-            img.save(buffer, format='PNG')
-            qr_pixmap = QPixmap()
-            qr_pixmap.loadFromData(buffer.getvalue())
-            
-            # Scale pixmap to fit label
-            qr_pixmap = qr_pixmap.scaled(180, 180, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.qrcode.setPixmap(qr_pixmap)
-        
+        self.setContent(self.content)
         layout.addWidget(self.label)
         layout.addWidget(self.qrcode)
         self.setLayout(layout)
@@ -102,7 +109,8 @@ class HIDDebug(QGroupBox):
         self.startBut.setEnabled(True)
     
     def __data_received(self,data:HIDBody):
-        self.content.append("接收数据:" + " ".join([hex(x) for x in data]))
+        self.content.append("接收数据:" + str(data.model_dump()))
+        self.hid_response.emit(data)
 
     def setupUi(self):
         self.setObjectName("HIDDebug")
@@ -128,11 +136,11 @@ class HIDDebug(QGroupBox):
 
     def call_function(self):
         try:
-            response=self.hid.call_function("get_device_info",{})
-            self.hid_response.emit(response)
-            self.content.append("响应:" + str(response))
+            request_id=self.hid.call_function("get_device_info",{})
+            print("request_id:",request_id)
         except Exception as e:
             self.content.append("响应:" + str(e))
+     
     
     
     
@@ -151,17 +159,22 @@ class DeviceInfo(QGroupBox):
         self.setObjectName("DeviceInfo")        
         layout=QVBoxLayout()
         layout.addWidget(QLabel("设备信息"))
-        qrCodeDisplay=QRCodeDisplay("https://www.baidu.com",self)
-        layout.addWidget(qrCodeDisplay)
-        infoBox=InfoItem(self,"Server Address","127.0.0.1:8080")
-        serialBox=InfoItem(self,"Serial Number","1234567890")
-        tokenBox=InfoItem(self,"Token","127.0.0.1:8080",secret=True)
-        layout.addWidget(InfoItem(self,"设备型号","127.0.0.1:8080"))
-        
-        layout.addWidget(infoBox)
-        layout.addWidget(serialBox)
-        layout.addWidget(tokenBox)
+        self.qrCodeDisplay=QRCodeDisplay("https://www.baidu.com",self)
+        layout.addWidget(self.qrCodeDisplay)
+        self.nameBox=InfoItem(self,"设备名称","127.0.0.1:8080")
+        self.versionBox=InfoItem(self,"版本号","1234567890")
+        self.macBox=InfoItem(self,"设备序列号","127.0.0.1:8080")
+        layout.addWidget(self.nameBox)
+        layout.addWidget(self.versionBox)
+        layout.addWidget(self.macBox)
         self.setLayout(layout)
+    
+    def handler_hid_response(self,response:HIDBody):
+        self.qrCodeDisplay.setContent(response.returns["id"]+":"+response.returns["sub_id"])
+        self.nameBox.setValue(response.returns["name"])
+        self.versionBox.setValue(response.returns["version"])
+        self.macBox.setValue(response.returns["mac"])
+
 
 
 class SettingView(QWidget):
@@ -176,6 +189,7 @@ class SettingView(QWidget):
         self.deviceInfo=DeviceInfo()
         self.hid=HIDDebug()
         self.hid.hid_response.connect(self.hid_response)
+        self.hid.hid_response.connect(self.deviceInfo.handler_hid_response)
         self.layout().addWidget(self.deviceInfo)
         self.layout().addWidget(self.hid)
         

@@ -5,7 +5,7 @@ import hid
 import time
 import queue
 import threading
-
+import json
 
 class HIDConnectionThread(QThread):
     connected = pyqtSignal()
@@ -27,6 +27,7 @@ class HIDConnectionThread(QThread):
                     self.is_connected=True
                 elif not devices and self.is_connected:
                     self.disconnected.emit()
+                    self.is_connected=False
                 time.sleep(1)
             except Exception as e:
                 print(f"HID connection error: {e}")
@@ -52,102 +53,25 @@ class HIDDataReceiverThread(QThread):
                 # 读取HID数据
                 data = self.hid_device.read(self.frame_size, timeout_ms=100)
                 if data:
-                    self.buffer.extend(data)
-                    self.__parse_frame()
+                    print("HID data received:",data)
+                    json_str=bytes(data).strip(b'\x00').decode('utf-8', errors='ignore')
+                    print(json_str)
+                    if json_str:
+                        try:
+                            json_dict=json.loads(json_str)
+                            hid_body=HIDBody(**json_dict)
+                            print("HID body:",hid_body)
+                            self.data_received.emit(hid_body)
+                        except json.JSONDecodeError as e:
+                            print(f"JSON解析失败: {e}, 数据: {json_str}")
+                        except Exception as e:
+                            print(f"HIDBody创建失败: {e}, 数据: {json_str}")
+                            pass
             except Exception as e:
                 if "timeout" not in str(e).lower():
                     print(f"HID data read error: {e}")
                 time.sleep(0.01)
-    def __parse_frame(self):
-        """解析缓冲区中的帧数据，提取完整的JSON并序列化为HIDBody"""
-        if not self.buffer:
-            return
-        
-        # 过滤掉值为0的字节（HID填充字节）
-        filtered_buffer = bytearray()
-        for byte in self.buffer:
-            if byte != 0:
-                filtered_buffer.append(byte)
-        
-        if not filtered_buffer:
-            # 如果过滤后没有数据，清空原缓冲区
-            self.buffer.clear()
-            return
-        
-        try:
-            # 转换为字符串
-            buffer_str = filtered_buffer.decode('utf-8', errors='ignore')
-            
-            # 查找完整的JSON对象
-            json_start = 0
-            brace_count = 0
-            in_string = False
-            escape_next = False
-            processed_length = 0
-            
-            for i, char in enumerate(buffer_str):
-                if escape_next:
-                    escape_next = False
-                    continue
-                
-                if char == '\\':
-                    escape_next = True
-                    continue
-                
-                if char == '"' and not escape_next:
-                    in_string = not in_string
-                    continue
-                
-                if not in_string:
-                    if char == '{':
-                        if brace_count == 0:
-                            json_start = i
-                        brace_count += 1
-                    elif char == '}':
-                        brace_count -= 1
-                        if brace_count == 0:
-                            # 找到一个完整的JSON对象
-                            json_str = buffer_str[json_start:i+1]
-                            try:
-                                # 解析JSON并创建HIDBody
-                                import json
-                                response_dict = json.loads(json_str)
-                                hid_body = HIDBody(**response_dict)
-                                self.data_received.emit(hid_body)
-                                
-                                
-                                # 更新已处理的数据长度
-                                processed_length = i + 1
-                                
-                            except json.JSONDecodeError as e:
-                                print(f"JSON解析失败: {e}, 数据: {json_str}")
-                                # 如果解析失败，可能是数据不完整，继续等待更多数据
-                                break
-                            except Exception as e:
-                                print(f"HIDBody创建失败: {e}")
-                                processed_length = i + 1
-            
-            # 移除已处理的数据
-            if processed_length > 0:
-                # 计算原始缓冲区中对应的字节位置
-                original_processed = 0
-                filtered_index = 0
-                
-                for i, byte in enumerate(self.buffer):
-                    if byte != 0:  # 非填充字节
-                        if filtered_index >= processed_length:
-                            break
-                        filtered_index += 1
-                    original_processed = i + 1
-                
-                # 移除已处理的原始数据
-                self.buffer = self.buffer[original_processed:]
-                
-            
-        except Exception as e:
-            print(f"帧解析失败: {e}")
-            # 如果出现严重错误，清空缓冲区
-            self.buffer.clear()
+  
     
     def stop(self):
         self.running = False
@@ -200,13 +124,11 @@ class HID(QObject):
             
             # 启动数据接收线程
             self.data_receiver_thread = HIDDataReceiverThread(self.hid_device)
-            self.data_receiver_thread.data_received.connect(self._on_data_received)
+            self.data_receiver_thread.data_received.connect(self.data_received)
             self.data_receiver_thread.start()
-            
-
-            
             self.connected.emit()
             print("HID device connected successfully")
+            self.call_function("get_device_info",{})
             
         except Exception as e:
             print(f"Failed to connect to HID device: {e}")
@@ -220,8 +142,6 @@ class HID(QObject):
         if self.data_receiver_thread:
             self.data_receiver_thread.stop()
             self.data_receiver_thread = None
-        
-
         
         # 关闭HID设备
         if self.hid_device:
@@ -240,14 +160,7 @@ class HID(QObject):
         self.disconnected.emit()
         print("HID device disconnected")
 
-    def _on_data_received(self, hid_body: HIDBody):
-        
-        if hid_body.type=="response":
-            if hid_body.request_id in self.pending_requests:
-                self.responses[hid_body.request_id]=hid_body
-                self.pending_requests[hid_body.request_id].set()
-
-        self.data_received.emit(hid_body)
+    
 
 
     def _send(self, request: HIDBody):
@@ -297,28 +210,13 @@ class HID(QObject):
             print(f"Failed to serialize request packets: {e}")
             raise
 
-    def _recv(self, request_id: str) -> HIDBody:
-        """阻塞等待指定请求的响应"""
-        # 创建等待事件
-        with self.pending_lock:
-            event = self.pending_requests[request_id]
-        event.wait()
-        with self.pending_lock:
-            del self.pending_requests[request_id]
-        response=self.responses[request_id]
-        del self.responses[request_id]
-        return response
 
-    def call_function(self, method: str, args: dict) -> HIDBody:
+    def call_function(self, method: str, args: dict) :
         """调用HID函数"""
         request_id=str(uuid.uuid4())
         request = HIDBody(type="request",cmd=method, args=args, request_id=request_id)
-        event = threading.Event()
-        with self.pending_lock:
-            self.pending_requests[request_id] = event
         self._send(request)
-        response = self._recv(request.request_id)
-        return response
+        return request_id
 
 
 
@@ -338,3 +236,5 @@ class HID(QObject):
                 self.hid_device.close()
             except:
                 pass
+
+

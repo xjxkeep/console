@@ -1,14 +1,13 @@
 from PyQt5.QtGui import QCloseEvent
-from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import QTimer, Qt
 from monitor import Monitor
 from controller import Controller
 from debug import Debug
 from about import About
 from setting import SettingView
-from guide import Guide
+# from guide import Guide
 import sys
-from qfluentwidgets import Dialog
-from PyQt5.QtWidgets import QApplication,QDialog,QInputDialog
+from PyQt5.QtWidgets import QApplication,QDialog,QInputDialog,QSizePolicy
 from qfluentwidgets.window import FluentWindow
 from qfluentwidgets.common import FluentIcon
 from pkg.mqtt import MQTTClient
@@ -28,8 +27,7 @@ class MainWindow(FluentWindow):
     
     
     def setupUi(self):
-        self.setWindowTitle("Monitor")
-        
+     
         
         self.monitor=Monitor(self.setting)
         self.controller=Controller(self.setting)
@@ -49,8 +47,10 @@ class MainWindow(FluentWindow):
         
     def __init__(self):
         super().__init__()
+
         
         self.load_setting()
+        self.setupUi() 
         # 初始化 API 实例
         self.api = API(self.setting)
         self.device=self.api.get_device_info()
@@ -59,9 +59,9 @@ class MainWindow(FluentWindow):
             self.setting["token"]=self.device.token
             self.setting["device_id"]=self.device.subscribe_id
             
-        self.setupUi() 
+        
             
-        self.version_manager=VersionManager(self.setting,self.api,self)
+        # self.version_manager=VersionManager(self.setting,self.api,self)
         # self.version_manager.check_update()
         self.quic_client=HighwayQuicClient(self.setting)
     
@@ -88,6 +88,8 @@ class MainWindow(FluentWindow):
 
         self.settingView.hid_response.connect(self._handle_hid_response)
         # self.client.start()
+        
+    
     
     def __handle_param_changed(self,param:dict):
         print("param changed",param)
@@ -117,13 +119,13 @@ class MainWindow(FluentWindow):
                 "insecure":True,
                 "source_device_id":"0",
                 "channel_count":10,
-                "device_id":1,
+                "device_id":"1",
                 "mqtt_port":31883,
                 "mqtt_setting_topic":"demo/aiomqtt",
                 "mqtt_host":"stream.api.andless.tech",
             }
-            self.guide=Guide(self)
-            self.guide.show()
+            # self.guide=Guide(self)
+            # self.guide.show()
           
     
     def quic_client_connected(self):
@@ -132,6 +134,7 @@ class MainWindow(FluentWindow):
     def quic_client_connection_error(self,error):
         print("quic client connection error",error)
         
+    
     def closeEvent(self, a0: QCloseEvent | None) -> None:
         print("mainwindow closeEvent")    
         print(self.setting)
