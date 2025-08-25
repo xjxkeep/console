@@ -94,7 +94,7 @@ class MainWindow(FluentWindow):
     def __handle_param_changed(self,param:dict):
         print("param changed",param)
         self.quic_client.change_video_format(param.get("video_format","H.264"))
-        self.mqtt_client.update_video_setting_sync(param.get("resolution","高清"),param.get("video_format","H.264"),param.get("bBAR",0))
+        self.mqtt_client.update_video_setting_sync(param.get("resolution","高清"),param.get("video_format","H.264"),param.get("bABR","关闭"))
         
         
     def update_monitor(self):
@@ -121,7 +121,7 @@ class MainWindow(FluentWindow):
                 "channel_count":10,
                 "device_id":"1",
                 "mqtt_port":31883,
-                "mqtt_setting_topic":"demo/aiomqtt",
+                "mqtt_setting_topic":"andless/device/aiomqtt",
                 "mqtt_host":"stream.api.andless.tech",
             }
             # self.guide=Guide(self)

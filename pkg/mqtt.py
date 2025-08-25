@@ -6,18 +6,58 @@ from protocol.video_pb2 import VideoAttributeMessage
 import time
 from queue import Queue
 from pkg.model import MqttMessage
+import hashlib
+
+
+def get_uuid(device_id: str, subscribe_id: str) -> str:
+    """
+    生成聊天UUID
+    
+    Args:
+        device_id: 设备ID
+        subscribe_id: 订阅ID
+    
+    Returns:
+        32个字符的十六进制UUID字符串
+    """
+    # 1. 字典序小的在前
+    if device_id < subscribe_id:
+        first, second = device_id, subscribe_id
+    else:
+        first, second = subscribe_id, device_id
+    
+    # 2. 拼接字符串：first:second
+    raw = f"{first}:{second}"
+    
+    # 3. 计算 SHA-256，取前 16 字节
+    md = hashlib.sha256(raw.encode('utf-8')).digest()
+    
+    # 4. 转成 32 个十六进制字符
+    uuid = md[:16].hex()
+    
+    return uuid
+
+
 class MQTTClient:
     def __init__(self,setting:dict):
         self.setting=setting
         self.host=setting.get("mqtt_host","stream.api.andless.tech")
         self.port=setting.get("mqtt_port",31883)
-        self.setting_topic=setting.get("mqtt_setting_topic","demo/aiomqtt")
         self.running=False
         self.client=mqtt.Client()
         self.fifo=Queue()    
         self.thread=None
         # 用于退出线程的特殊标记
         self._stop_sentinel = object()
+        
+
+    @property
+    def setting_topic(self):
+        basic_topic=self.setting.get("mqtt_setting_topic","andless/device/aiomqtt")
+        device_id=self.setting.get("device_id",0)
+        sub_id=self.setting.get("source_device_id",0)
+        uuid=get_uuid(str(sub_id),str(device_id))
+        return f"{basic_topic}/{uuid}"
 
     def start(self):
         self.running=True
@@ -50,7 +90,7 @@ class MQTTClient:
         print("connected to mqtt server")
     
 
-    def update_video_setting_sync(self,resolution,video_encode_type,bBAR):
+    def update_video_setting_sync(self,resolution,video_encode_type,bABR):
         if self.client is None:
             return
         video_setting=VideoAttributeMessage()
@@ -68,7 +108,7 @@ class MQTTClient:
         video_setting.max_rate=10000000
         video_setting.frame_rate=30
         video_setting.video_encode_type=video_encode_type
-        mqtt_message=MqttMessage(width=video_setting.width,height=video_setting.height,video_encode_type=video_setting.video_encode_type,bBAR={"开启":1,"关闭":0}[bBAR])
+        mqtt_message=MqttMessage(width=video_setting.width,height=video_setting.height,video_encode_type=video_setting.video_encode_type,bABR={"开启":1,"关闭":0}[bABR])
         self.fifo.put(mqtt_message.model_dump_json())
         
     def close(self):

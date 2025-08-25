@@ -43,4 +43,4 @@ class MqttMessage(BaseModel):
     width: int
     height: int
     video_encode_type: str
-    bBAR: int
+    bABR: int
