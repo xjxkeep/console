@@ -1,3 +1,4 @@
+import string
 from pydantic import BaseModel
 
 
@@ -12,8 +13,8 @@ class HIDBody(BaseModel):
 class Device(BaseModel):
     ID :int =None
     name: str = None
-    device_id: str = None
-    subscribe_id: str = None
+    device_id: int = None
+    subscribe_id: int = None
     register_ip: str = None
     mac: str = None
     version: str = None
@@ -36,3 +37,10 @@ class DeviceResponse(BaseModel):
     code: int
     msg: str
     data: Device
+
+
+class MqttMessage(BaseModel):
+    width: int
+    height: int
+    video_encode_type: str
+    bBAR: int

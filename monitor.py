@@ -39,7 +39,18 @@ class StatusBar(QWidget):
         self.channel=TransparentDropDownPushButton(FluentIcon.IOT.icon(),"线路: 上海")
         self.resolution=TransparentDropDownPushButton(FluentIcon.VIDEO.icon(),"清晰度: 高清")
         self.video_format=TransparentDropDownPushButton(FluentIcon.VIDEO.icon(),"视频格式: H.264")
+        self.bBAR=TransparentPushButton(FluentIcon.VIDEO.icon(),"码率自适应: 关闭")
         self.battery=TransparentPushButton(QIcon("assets/svg/battery-full.svg"),"100%")
+
+        switch_menu=RoundMenu(parent=self)
+        switch_menu.addActions([
+            Action('开启'),
+            Action('关闭'),
+        ])
+        self.bBAR.setMenu(switch_menu)
+        switch_menu.triggered.connect(self.__handle_bBAR_menu_triggered)
+
+
         channel_menu = RoundMenu(parent=self)
         channel_menu.addActions([
             Action('上海'),
@@ -83,6 +94,7 @@ class StatusBar(QWidget):
         layout.addWidget(self.video_format)
         layout.addWidget(self.resolution)
         layout.addWidget(self.channel)
+        layout.addWidget(self.bBAR)
         layout.addWidget(self.fps)
         layout.addWidget(self.date)
         layout.addWidget(self.sync)
@@ -97,6 +109,7 @@ class StatusBar(QWidget):
             "resolution":self.resolution.text().split(":")[1].strip(),
             "video_format":self.video_format.text().split(":")[1].strip(),
             "channel":self.channel.text().split(":")[1].strip(),
+            "bBAR":self.bBAR.text().split(":")[1].strip(),
         })
     
     def __handle_channel_menu_triggered(self,action:Action):
@@ -111,6 +124,10 @@ class StatusBar(QWidget):
     def __handle_resolution_menu_triggered(self,action:Action):
         print(action.text())
         self.resolution.setText("清晰度: "+action.text())
+        self.__handel_setting_changed()
+    def __handle_bBAR_menu_triggered(self,action:Action):
+        print(action.text())
+        self.bBAR.setText("码率自适应: "+action.text())
         self.__handel_setting_changed()
     def __init__(self):
         super().__init__()

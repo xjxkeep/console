@@ -164,7 +164,6 @@ class HighwayQuicClient(QObject):
                     
                     # CRC匹配则退出循环
                     if check_crc == header[1]:
-                        print("crc match ",length)
                         # 读取消息体
                         data = await reader.readexactly(length)
                         self.download_bytes+=length
@@ -321,15 +320,15 @@ class HighwayQuicClient(QObject):
         self.file_reader,self.file_writer=await self.client.create_stream(False)
         register_msg = Register(
             device=Device(
-                id=self.setting.get("device_id",1),
+                id=int(self.setting.get("device_id",1)),
                 message_type=Device.MessageType.FILE
             ),
             subscribe_device=Device(
-                id=self.setting.get("source_device_id",1),
+                id=int(self.setting.get("source_device_id",1)),
                 message_type=Device.MessageType.FILE
             )
         )
-        print("send file register message")
+        print("send file register message ",register_msg)
         await self.send_message(writer=self.file_writer,message=register_msg)
     
     def send_file(self,filePath):
@@ -358,18 +357,18 @@ class HighwayQuicClient(QObject):
         
         register_msg = Register(
             device=Device(
-                id=self.setting.get("device_id",1),
+                id=int(self.setting.get("device_id",1)),
                 message_type=Device.MessageType.AUDIO,
                 # device_type=Device.DeviceType.CONTROLLER
             ),
             subscribe_device=Device(
-                id=self.setting.get("source_device_id",1),
+                id=int(self.setting.get("source_device_id",1)),
                 message_type=Device.MessageType.AUDIO,
                 # device_type=Device.DeviceType.RECEIVER
             )
         )
+        print(f"Audio stream {register_msg} sent successfully, writer state: {self.audio_writer.is_closing()}")
         await self.send_message(writer=self.audio_writer,message=register_msg)
-        print(f"Audio stream register sent successfully, writer state: {self.audio_writer.is_closing()}")
         
         self.tasks.append(self.loop.create_task(self.__read_audio_stream(reader=self.audio_reader)))
         self.tasks.append(self.loop.create_task(self.__send_audio_stream(writer=self.audio_writer)))
@@ -380,7 +379,6 @@ class HighwayQuicClient(QObject):
             while self.running:
                 message = await self.receive_message(reader)
                 audio=Audio.FromString(message)
-                print("receive audio frame",len(audio.raw))
                 self.input_wave_data.emit(np.frombuffer(audio.raw,dtype=np.int16))
                 if audio.raw:
                     self.audio_player.write(audio.raw)
@@ -420,15 +418,15 @@ class HighwayQuicClient(QObject):
         # Register video stream
         register_msg = Register(
             device=Device(
-                id=self.setting.get("device_id",1),
+                id=int(self.setting.get("device_id",1)),
                 message_type=Device.MessageType.VIDEO
             ),
             subscribe_device=Device(
-                id=self.setting.get("source_device_id",1),
+                id=int(self.setting.get("source_device_id",1)),
                 message_type=Device.MessageType.VIDEO
             )
         )
-        print("send video register message")
+        print("send video register message ",register_msg)
         await self.send_message(writer=self.video_writer,message=register_msg)
 
         # Start message reading task
@@ -443,7 +441,7 @@ class HighwayQuicClient(QObject):
     def send_control_message(self, values: list):
         # TODO 发送速率小于生产速率会产生堆积 导致延迟
         if self.loop and self.running and self.client:
-            print("send control message:",values)
+            # print("send control message:",values)
             future = asyncio.run_coroutine_threadsafe(
                 self.control_stream_queue.put(Control(channels=values)), 
                 self.loop
@@ -457,11 +455,11 @@ class HighwayQuicClient(QObject):
         # Register control stream
         register_msg = Register(
             device=Device(
-                id=self.setting.get("device_id",1),
+                id=int(self.setting.get("device_id",1)),
                 message_type=Device.MessageType.CONTROL
             )
         )
-        print("send control register message")
+        print("send control register message ",register_msg)
         await self.send_message(writer=self.control_writer,message=register_msg)
         print(f"Control stream register sent successfully, writer state: {self.control_writer.is_closing()}")
         self.tasks.append(self.loop.create_task(self.__send_control_message(writer=self.control_writer)))
@@ -470,7 +468,7 @@ class HighwayQuicClient(QObject):
         try:
             while self.running:
                 message=await self.control_stream_queue.get()
-                print("send control message channels:",message.channels )
+                # print("send control message channels:",message.channels )
                 await self.send_message(writer=writer,message=message)
         except Exception as e:
             self.control_stream_failed.emit(f"Send control message error: {str(e)}")

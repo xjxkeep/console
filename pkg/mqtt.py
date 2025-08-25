@@ -5,6 +5,7 @@ import threading
 from protocol.video_pb2 import VideoAttributeMessage
 import time
 from queue import Queue
+from pkg.model import MqttMessage
 class MQTTClient:
     def __init__(self,setting:dict):
         self.setting=setting
@@ -49,7 +50,7 @@ class MQTTClient:
         print("connected to mqtt server")
     
 
-    def update_video_setting_sync(self,resolution,video_encode_type):
+    def update_video_setting_sync(self,resolution,video_encode_type,bBAR):
         if self.client is None:
             return
         video_setting=VideoAttributeMessage()
@@ -67,7 +68,8 @@ class MQTTClient:
         video_setting.max_rate=10000000
         video_setting.frame_rate=30
         video_setting.video_encode_type=video_encode_type
-        self.fifo.put(video_setting.SerializeToString())
+        mqtt_message=MqttMessage(width=video_setting.width,height=video_setting.height,video_encode_type=video_setting.video_encode_type,bBAR={"开启":1,"关闭":0}[bBAR])
+        self.fifo.put(mqtt_message.model_dump_json())
         
     def close(self):
         print("mqtt client close")
