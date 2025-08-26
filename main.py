@@ -17,7 +17,7 @@ from pkg.version_manager import VersionManager
 from protocol.highway_pb2 import Device
 import json
 import os
-from pkg.model import HIDBody
+from pkg.model import HIDBody,Setting
 # TODO
 # 1. 封装下请求的host 等参数 统一管理 后面host走下发
 # 2. 界面完善
@@ -55,9 +55,9 @@ class MainWindow(FluentWindow):
         self.api = API(self.setting)
         self.device=self.api.get_device_info()
         if self.device is not None: 
-            self.setting["source_device_id"]=self.device.device_id
-            self.setting["token"]=self.device.token
-            self.setting["device_id"]=self.device.subscribe_id
+            self.setting.source_device_id=self.device.device_id
+            self.setting.token=self.device.token
+            self.setting.device_id=self.device.subscribe_id
             
         
             
@@ -103,27 +103,28 @@ class MainWindow(FluentWindow):
     
     def _handle_hid_response(self,response:HIDBody):
         print("hid response",response)
-        self.debug.setValue("source_device_id",response.returns["id"])
-        self.debug.setValue("device_id",response.returns["sub_id"])
+        try:
+            source_id = int(response.returns["id"],base=10)
+            device_id = int(response.returns["sub_id"],base=10)
+            self.debug.setValue("source_device_id", source_id)
+            self.debug.setValue("device_id", device_id)
+        except (ValueError, OverflowError) as e:
+            print(f"Error converting HID response IDs: {e}")
+            print(f"Raw id: {response.returns.get('id')}")
+            print(f"Raw sub_id: {response.returns.get('sub_id')}")
+        except Exception as e:
+            print(f"Unexpected error in _handle_hid_response: {e}")
 
     def load_setting(self):
-        if os.path.exists(".setting.json"):
-            with open(".setting.json", "r") as f:
-                self.setting = json.load(f)
-            print("load setting:",self.setting)
-        else:
-            
-            self.setting = {
-                "host":"stream.api.andless.tech",
-                "port":30042,
-                "insecure":True,
-                "source_device_id":"0",
-                "channel_count":10,
-                "device_id":"1",
-                "mqtt_port":31883,
-                "mqtt_setting_topic":"andless/device/aiomqtt",
-                "mqtt_host":"stream.api.andless.tech",
-            }
+        try:
+            if os.path.exists(".setting.json"):
+                with open(".setting.json", "r") as f:
+                    self.setting = Setting.model_validate_json(f.read())
+                print("load setting:",self.setting)
+        except Exception as e:
+            print("load setting error",e)
+            self.setting = Setting()
+       
             # self.guide=Guide(self)
             # self.guide.show()
           
@@ -137,9 +138,10 @@ class MainWindow(FluentWindow):
     
     def closeEvent(self, a0: QCloseEvent | None) -> None:
         print("mainwindow closeEvent")    
+        self.setting.channels=self.controller.getChannelValues()
         print(self.setting)
         with open(".setting.json", "w") as f:
-            json.dump(self.setting, f)
+            json.dump(self.setting.model_dump(), f)
         self.quic_client.close()
         self.mqtt_client.close()
         print("client closed")    

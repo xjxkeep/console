@@ -4,6 +4,7 @@ from PyQt5.QtCore import Qt
 import os
 import threading
 from PyQt5.QtCore import pyqtSignal
+from pkg.model import Setting
 class Uploader(QWidget):
     fileToSend=pyqtSignal(str)
     def __init__(self):
@@ -44,6 +45,34 @@ class Uploader(QWidget):
         self.progressBar.setValue(progress)
         self.progressBar.setFormat(f"{fileName} - {progress}%")
 
+class NumberSpinBox(QWidget):
+    valueChanged=pyqtSignal(int)
+    def __init__(self,value:int):
+        super().__init__()
+        self.__value=value
+        self.setupUi()
+
+    def setupUi(self):
+        self.setLayout(QHBoxLayout())
+        self.setLayout(QHBoxLayout())
+        self.input=LineEdit()
+        self.input.setText(str(self.__value))
+        self.input.textChanged.connect(self.__inputChanged)
+        self.layout().addWidget(self.input)
+    
+    def __inputChanged(self,text:str):
+        try:
+            self.__value=int(text)
+            self.valueChanged.emit(self.__value)
+        except ValueError:
+            pass
+    def value(self):
+        return self.__value
+    
+    def setValue(self,value:int):
+        self.__value=value
+        self.input.setText(str(self.__value))
+
 class SettingItem(QWidget):
     settingChanged=pyqtSignal(dict)
     def setupUi(self):
@@ -57,11 +86,7 @@ class SettingItem(QWidget):
             self.valueEdit.setChecked(self.value)
             self.valueEdit.checkedChanged.connect(self.__settingChanged)
         elif isinstance(self.value, (int, float)):
-            self.valueEdit = SpinBox() if isinstance(self.value, int) else DoubleSpinBox()
-            if isinstance(self.value, int):
-                self.valueEdit.setRange(-999999999, 999999999)
-            else:
-                self.valueEdit.setRange(-999999999.0, 999999999.0)
+            self.valueEdit = NumberSpinBox(self.value)
             self.valueEdit.setValue(self.value)
             self.valueEdit.valueChanged.connect(self.__settingChanged)
         else:
@@ -76,7 +101,7 @@ class SettingItem(QWidget):
         self.value=value
         if isinstance(self.valueEdit, SwitchButton):
             self.valueEdit.setChecked(value)
-        elif isinstance(self.valueEdit, (SpinBox, DoubleSpinBox)):
+        elif isinstance(self.valueEdit, (SpinBox, DoubleSpinBox,NumberSpinBox)):
             self.valueEdit.setValue(value)
         else:
             self.valueEdit.setText(value)
@@ -96,7 +121,7 @@ class SettingItem(QWidget):
     def getValue(self):
         if isinstance(self.valueEdit, SwitchButton):
             value = self.valueEdit.isChecked()
-        elif isinstance(self.valueEdit, (SpinBox, DoubleSpinBox)):
+        elif isinstance(self.valueEdit, (SpinBox, DoubleSpinBox,NumberSpinBox)):
             value = self.valueEdit.value()
         else:
             value = self.valueEdit.text()
@@ -104,7 +129,7 @@ class SettingItem(QWidget):
 
 class Debug(ScrollArea):
     settingChanged=pyqtSignal(dict)
-    def __init__(self,setting:dict):
+    def __init__(self,setting:Setting):
         super().__init__()
         self.setting=setting
         self.setupUi()
@@ -120,7 +145,10 @@ class Debug(ScrollArea):
         layout.addWidget(self.uploader)
         self.setting_list=[]
         self.settingItemMap=dict()
-        for key,value in self.setting.items():
+        for key,value in self.setting.model_dump().items():
+            print("key",key,"value",value)
+            if key=="channels":
+                continue
             item=SettingItem(key,value)
             self.setting_list.append(item)
             item.settingChanged.connect(self.updateSetting)
@@ -134,7 +162,7 @@ class Debug(ScrollArea):
     
     def updateSetting(self,setting:dict):
         for key,value in setting.items():
-            self.setting[key]=value
+            setattr(self.setting,key,value)
         self.settingChanged.emit(setting)
 
 
@@ -162,11 +190,6 @@ if __name__ == "__main__":
     import sys
     from PyQt5.QtWidgets import QApplication
     app=QApplication(sys.argv)
-    debug=Debug({
-        "host":"127.0.0.1",
-        "port":30042,
-        "insecure":True,
-        "source_device_id":1
-    })
+    debug=Debug(Setting())
     debug.show()
     sys.exit(app.exec_())

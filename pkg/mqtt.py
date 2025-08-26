@@ -5,7 +5,7 @@ import threading
 from protocol.video_pb2 import VideoAttributeMessage
 import time
 from queue import Queue
-from pkg.model import MqttMessage
+from pkg.model import MqttMessage,Setting
 import hashlib
 
 
@@ -39,10 +39,10 @@ def get_uuid(device_id: str, subscribe_id: str) -> str:
 
 
 class MQTTClient:
-    def __init__(self,setting:dict):
+    def __init__(self,setting:Setting):
         self.setting=setting
-        self.host=setting.get("mqtt_host","stream.api.andless.tech")
-        self.port=setting.get("mqtt_port",31883)
+        self.host=setting.mqtt_host
+        self.port=setting.mqtt_port
         self.running=False
         self.client=mqtt.Client()
         self.fifo=Queue()    
@@ -53,9 +53,9 @@ class MQTTClient:
 
     @property
     def setting_topic(self):
-        basic_topic=self.setting.get("mqtt_setting_topic","andless/device/aiomqtt")
-        device_id=self.setting.get("device_id",0)
-        sub_id=self.setting.get("source_device_id",0)
+        basic_topic=self.setting.mqtt_setting_topic
+        device_id=self.setting.device_id
+        sub_id=self.setting.source_device_id
         uuid=get_uuid(str(sub_id),str(device_id))
         return f"{basic_topic}/{uuid}"
 
@@ -129,7 +129,7 @@ class MQTTClient:
 
 if __name__ == "__main__":
     # 测试代码
-    client = MQTTClient({"mqtt_host": "test.mosquitto.org"})
+    client = MQTTClient(Setting(mqtt_host="test.mosquitto.org"))
     client.start()
     time.sleep(2)
     client.close()

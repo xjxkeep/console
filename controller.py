@@ -6,6 +6,7 @@ import sys
 from PyQt5.QtCore import QTimer
 from pkg.joystick import JoyStick
 import threading
+from pkg.model import Setting
 class Channel(QWidget):
     channelSignal=pyqtSignal(int)
     def setupUi(self):
@@ -128,7 +129,9 @@ class Controller(ScrollArea):
         self.channels=[Channel() for _ in range(self.channelCount)]
         for idx,channel in enumerate(self.channels):
             channel.setLabel(f"Channel{idx+1}")
-            channel.setFineTune(self.setting.get(f"Channel{idx+1}",0))
+            print("channel",idx)
+            print("setting.channels",self.setting.channels)
+            channel.setFineTune(self.setting.channels[idx] if idx<len(self.setting.channels) else 0)
             layout.addWidget(channel)
         self.widget().setLayout(layout)
         self.timer=QTimer(self)
@@ -136,10 +139,10 @@ class Controller(ScrollArea):
         self.timer.timeout.connect(self.__emit_control_message)
         self.timer.start()
         
-    def __init__(self,setting:dict) -> None:
+    def __init__(self,setting:Setting) -> None:
         super().__init__()
         self.setting=setting
-        self.channelCount=self.setting.get("channel_count",10)
+        self.channelCount=self.setting.channel_count
         self.setupUi()
         self.detector.signal.connect(self.setChannelValue)
 
@@ -158,13 +161,7 @@ class Controller(ScrollArea):
             self.channels[idx].setValue(value)
         self.__emit_control_message()
     
-    def closeEvent(self, a0) -> None:
-        print("controller closeEvent")
-        self.setting["channel_count"]=self.channelCount
-        for idx,channel in enumerate(self.channels):
-            self.setting[f"Channel{idx+1}"]=channel.getFineTune()
-        super().closeEvent(a0)
-        
+    
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

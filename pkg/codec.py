@@ -61,23 +61,23 @@ class H264Decoder(QObject):
         print("start decode video with format",self.transform_map[self.format])
         self.container = av.open(self.stream,format=self.transform_map[self.format],buffer_size=1024*1024*10)
         
-        while self.running:
-            try:
-            
-                for frame in self.container.decode(video=0):
-                    image=frame.to_ndarray(format='rgb24')
-                    height, width, _ = image.shape
-                    bytes_per_line = 3 * width
-                    q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
-                    # Convert QImage to QPixmap
-                    pixmap = QPixmap.fromImage(q_img)
-                    self.frames.put(pixmap)
-                    self.frame_decoded.emit()
-                    if not self.running:
-                        print("video decode thread exit")
-                        return
-            except Exception as e:
-                pass
+        try:
+            while self.running:
+                    for frame in self.container.decode(video=0):
+                        image=frame.to_ndarray(format='rgb24')
+                        height, width, _ = image.shape
+                        bytes_per_line = 3 * width
+                        q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
+                        # Convert QImage to QPixmap
+                        pixmap = QPixmap.fromImage(q_img)
+                        self.frames.put(pixmap)
+                        self.frame_decoded.emit()
+                        if not self.running:
+                            print("video decode thread exit")
+                            return
+        except Exception as e:
+            print("video decode error",e)
+            pass
         self.stream.close()
         self.container.close()
         print("video decode thread exit")

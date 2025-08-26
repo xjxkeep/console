@@ -16,6 +16,7 @@ from asyncio import Queue
 import os
 from pkg.audio import AudioRecorder,AudioPlayer
 import numpy as np
+from pkg.model import Setting
 def generate_crc8_table():
     crc8_table = [0] * 256
     for i in range(256):
@@ -73,7 +74,7 @@ class HighwayQuicClient(QObject):
     input_wave_data = pyqtSignal(np.ndarray)
     
     
-    def __init__(self, setting) -> None:
+    def __init__(self, setting:Setting) -> None:
         super().__init__()
         self.setting=setting
         self.client = None
@@ -91,7 +92,7 @@ class HighwayQuicClient(QObject):
         self.latency_count=0
         # QUIC configuration
         self.configuration = QuicConfiguration(alpn_protocols=["HLD"], is_client=True)
-        if self.setting.get("insecure",True):
+        if self.setting.insecure:
             self.configuration.verify_mode = ssl.CERT_NONE
         self.video_stream_failed.connect(self.reconnect_video_stream)
         self.control_stream_failed.connect(self.reconnect_control_stream)
@@ -280,8 +281,8 @@ class HighwayQuicClient(QObject):
                 
                 print("connecting quic server, running",self.running)
                 async with connect(
-                    self.setting.get("host","127.0.0.1"),
-                    self.setting.get("port",30042),
+                    self.setting.host,
+                    self.setting.port,
                     configuration=self.configuration,
                     create_protocol=HighwayClientProtocol,
                 ) as client:
@@ -320,11 +321,11 @@ class HighwayQuicClient(QObject):
         self.file_reader,self.file_writer=await self.client.create_stream(False)
         register_msg = Register(
             device=Device(
-                id=int(self.setting.get("device_id",1)),
+                id=int(self.setting.device_id),
                 message_type=Device.MessageType.FILE
             ),
             subscribe_device=Device(
-                id=int(self.setting.get("source_device_id",1)),
+                id=int(self.setting.source_device_id),
                 message_type=Device.MessageType.FILE
             )
         )
@@ -357,12 +358,12 @@ class HighwayQuicClient(QObject):
         
         register_msg = Register(
             device=Device(
-                id=int(self.setting.get("device_id",1)),
+                id=int(self.setting.device_id),
                 message_type=Device.MessageType.AUDIO,
                 # device_type=Device.DeviceType.CONTROLLER
             ),
             subscribe_device=Device(
-                id=int(self.setting.get("source_device_id",1)),
+                id=int(self.setting.source_device_id),
                 message_type=Device.MessageType.AUDIO,
                 # device_type=Device.DeviceType.RECEIVER
             )
@@ -418,11 +419,11 @@ class HighwayQuicClient(QObject):
         # Register video stream
         register_msg = Register(
             device=Device(
-                id=int(self.setting.get("device_id",1)),
+                id=int(self.setting.device_id),
                 message_type=Device.MessageType.VIDEO
             ),
             subscribe_device=Device(
-                id=int(self.setting.get("source_device_id",1)),
+                id=int(self.setting.source_device_id),
                 message_type=Device.MessageType.VIDEO
             )
         )
@@ -455,7 +456,7 @@ class HighwayQuicClient(QObject):
         # Register control stream
         register_msg = Register(
             device=Device(
-                id=int(self.setting.get("device_id",1)),
+                id=int(self.setting.device_id),
                 message_type=Device.MessageType.CONTROL
             )
         )

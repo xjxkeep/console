@@ -3,16 +3,16 @@ import hashlib
 import base64
 import time
 import json
-from pkg.model import Device,DeviceResponse,Version,VersionResponse
+from pkg.model import Device,DeviceResponse,Version,VersionResponse,Setting
 
 
 class API:
-    def __init__(self, setting: dict):
-        self.base_url = setting.get("base_url", "http://139.224.218.82:30080")
-        self.user_agent = setting.get("user_agent", "Python-Client/1.0")
-        self.token = setting.get("token", "0")
-        self.source_device_id = setting.get("source_device_id", "0")
-        self.arch = setting.get("arch", "x86_64")
+    def __init__(self, setting: Setting):
+        self.base_url = setting.base_url
+        self.user_agent = setting.user_agent
+        self.token = setting.token
+        self.source_device_id = setting.source_device_id
+        self.arch = setting.arch
         
     def generate_sign(self, timestamp: int, path: str, payload: str = "") -> str:
         """
