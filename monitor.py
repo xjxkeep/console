@@ -11,6 +11,7 @@ import time
 import threading
 from view.wave import WaveformWidget
 import numpy as np
+from pkg.model import Setting
 class StatusBar(QWidget):
     param_changed=pyqtSignal(dict)
     def update(self):
@@ -173,7 +174,7 @@ class Monitor(QWidget):
 
 
 
-    def __init__(self,setting:dict,parent=None) -> None:
+    def __init__(self,setting:Setting,parent=None) -> None:
         super().__init__(parent)
         self.setting=setting
         self.setupUi()

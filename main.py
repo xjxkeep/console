@@ -48,7 +48,7 @@ class MainWindow(FluentWindow):
     def __init__(self):
         super().__init__()
 
-        
+        self.setting = Setting()
         self.load_setting()
         self.setupUi() 
         # 初始化 API 实例
@@ -123,8 +123,6 @@ class MainWindow(FluentWindow):
                 print("load setting:",self.setting)
         except Exception as e:
             print("load setting error",e)
-            self.setting = Setting()
-       
             # self.guide=Guide(self)
             # self.guide.show()
           
