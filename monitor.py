@@ -12,6 +12,7 @@ import threading
 from view.wave import WaveformWidget
 import numpy as np
 from pkg.model import Setting
+from view.video_display import VideoDisplayWidget
 class StatusBar(QWidget):
     param_changed=pyqtSignal(dict)
     def update(self):
@@ -49,7 +50,7 @@ class StatusBar(QWidget):
             Action('关闭'),
         ])
         self.bABR.setMenu(switch_menu)
-        switch_menu.triggered.connect(self.__handle_bABR_menu_triggered)
+        # switch_menu.triggered.connect(self.__handle_bABR_menu_triggered)
 
 
         channel_menu = RoundMenu(parent=self)
@@ -148,7 +149,7 @@ class Monitor(QWidget):
         
         layout.addWidget(self.statusBar)
 
-        self.display=QLabel("无信号，等待客户端连接...")
+        self.display=VideoDisplayWidget("无信号，等待客户端连接...")
         self.display.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.display.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self.display.setStyleSheet("background-color: rgb(0,0,0);color: rgb(255,255,255);")
@@ -188,7 +189,6 @@ class Monitor(QWidget):
         self.statusBar.param_changed.connect(self.param_changed)
     
     def update_wave_form(self,value:np.ndarray):
-        print("update_wave_form",len(value))
         self.waveform.set_data(value)
     
     def update_upload_speed(self,value:float):
@@ -221,9 +221,8 @@ class Monitor(QWidget):
         try:
             # Increment the frame count
             self.fps += 1
-            self.__frame=pixmap
-            scaled_pixmap = self.__frame.scaled(self.display.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-            self.display.setPixmap(scaled_pixmap)
+            # 直接设置图像，VideoDisplayWidget会自动处理缩放
+            self.display.setPixmap(pixmap)
         
         except Exception as e:
             print(f"Error displaying video: {str(e)}")

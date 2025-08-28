@@ -34,6 +34,7 @@ class MainWindow(FluentWindow):
         self.debug=Debug(self.setting)
         self.about=About()
         self.settingView=SettingView()
+        self.resize(self.setting.window_width,self.setting.window_height)
         
 
         self.addSubInterface(self.monitor,FluentIcon.MOVIE, "Monitor")
@@ -137,6 +138,7 @@ class MainWindow(FluentWindow):
     def closeEvent(self, a0: QCloseEvent | None) -> None:
         print("mainwindow closeEvent")    
         self.setting.channels=self.controller.getChannelValues()
+        self.setting.window_height,self.setting.window_width=self.height(),self.width()
         print(self.setting)
         with open(".setting.json", "w") as f:
             json.dump(self.setting.model_dump(), f)

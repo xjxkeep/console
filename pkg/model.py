@@ -62,3 +62,5 @@ class Setting(BaseModel):
     token: str = "0"
     arch: str = "x86_64"
     channels: list[int] = [0]*10 
+    window_width: int = 600
+    window_height: int = 800

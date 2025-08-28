@@ -54,7 +54,6 @@ class NumberSpinBox(QWidget):
 
     def setupUi(self):
         self.setLayout(QHBoxLayout())
-        self.setLayout(QHBoxLayout())
         self.input=LineEdit()
         self.input.setText(str(self.__value))
         self.input.textChanged.connect(self.__inputChanged)
