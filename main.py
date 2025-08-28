@@ -53,7 +53,7 @@ class MainWindow(FluentWindow):
         self.load_setting()
         self.setupUi() 
         # 初始化 API 实例
-        self.api = API(self.setting)
+        self.api = API(self.setting,self)
         self.device=self.api.get_device_info()
         if self.device is not None: 
             self.setting.source_device_id=self.device.device_id
@@ -143,10 +143,12 @@ class MainWindow(FluentWindow):
         with open(".setting.json", "w") as f:
             json.dump(self.setting.model_dump(), f)
         self.quic_client.close()
+        print("quic client closed")
         self.mqtt_client.close()
         print("client closed")    
         self.controller.close()
         print("controller closed")
+        self.api.close()
         
         return super().closeEvent(a0)
 

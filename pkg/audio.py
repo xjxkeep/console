@@ -20,7 +20,7 @@ class AudioRecorder:
             return
         self.running=True
         self.ai.start_stream()
-        self.thread=threading.Thread(target=self.__run,daemon=True)
+        self.thread=threading.Thread(target=self.__run)
         self.thread.start()
 
     def read(self,n):

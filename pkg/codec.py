@@ -52,7 +52,7 @@ class H264Decoder(QObject):
         self.decode_thread.join()
         self.running=True
         self.stream=BufferStream()
-        self.decode_thread = threading.Thread(target=self.__decode_frames,daemon=True)
+        self.decode_thread = threading.Thread(target=self.__decode_frames)
         self.decode_thread.start()
     
     
@@ -79,7 +79,8 @@ class H264Decoder(QObject):
             print("video decode error",e)
             pass
         self.stream.close()
-        self.container.close()
+        if self.container:
+            self.container.close()
         print("video decode thread exit")
         
 class H264Encoder(QObject):

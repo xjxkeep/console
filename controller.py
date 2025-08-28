@@ -4,7 +4,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import *
 import sys
 from PyQt5.QtCore import QTimer
-from pkg.joystick import JoyStick
+from pkg.joystick import JoyStick  
 import threading
 from pkg.model import Setting
 class Channel(QWidget):
@@ -103,14 +103,21 @@ class Detector(QWidget):
         self.setDevices(self.getDevices())
     
 
-        
+    def close(self):
+        if hasattr(self,"joystick"):
+            self.joystick.close()
+            print("detector joystick close")
+        super().close()
+    
+    def lazy_init(self):
+        if not hasattr(self,"joystick"):
+            self.joystick.init()
     
     def __init__(self) -> None:
         super().__init__()
         self.setupUi()
-        self.deviceMap=dict()        
+        self.deviceMap=dict()      
         self.joystick=JoyStick()
-        threading.Thread(target=self.joystick.init).start()
        
 
 
@@ -161,6 +168,13 @@ class Controller(ScrollArea):
             self.channels[idx].setValue(value)
         self.__emit_control_message()
     
+    def close(self):
+        self.timer.stop()
+        print("controller timer stop")
+        self.detector.close()
+        print("controller detector close")
+        super().close()
+
     
 
 if __name__ == "__main__":
