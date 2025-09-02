@@ -13,6 +13,7 @@ from view.wave import WaveformWidget
 import numpy as np
 from pkg.model import Setting
 from view.video_display import VideoDisplayWidget
+from view.imu import IMUWidget
 class StatusBar(QWidget):
     param_changed=pyqtSignal(dict)
     def update(self):
@@ -136,6 +137,8 @@ class StatusBar(QWidget):
         self.setupUi()
 
 
+
+
 class Monitor(QWidget):
     # TODO 视频解码卡顿
     startSignal=pyqtSignal()
@@ -144,34 +147,57 @@ class Monitor(QWidget):
     def setupUi(self):
         self.setObjectName("Monitor")
         self.resize(800,600)
-        layout=QVBoxLayout()
-        self.statusBar=StatusBar()
         
-        layout.addWidget(self.statusBar)
+        # 使用QGridLayout来实现IMU控件在display右下角的布局
+        main_layout = QVBoxLayout()
+        self.statusBar = StatusBar()
+        main_layout.addWidget(self.statusBar)
 
-        self.display=VideoDisplayWidget("无信号，等待客户端连接...")
+        # 创建display和IMU的组合布局
+        display_imu_layout = QGridLayout()
+        display_imu_layout.setSpacing(5)  # 减小控件间距，为400x400的IMU控件留出空间
+        display_imu_layout.setContentsMargins(0, 0, 0, 0)  # 移除边距
+        
+        self.display = QLabel("无信号，等待客户端连接...")
         self.display.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.display.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self.display.setStyleSheet("background-color: rgb(0,0,0);color: rgb(255,255,255);")
-        layout.addWidget(self.display)
-        self.waveform=WaveformWidget()
-        layout.addWidget(self.waveform)
         
-        self.testButton=PushButton("测试本地视频解码")
+        self.imu = IMUWidget()
+        
+        # 将display放在(0,0)位置，占据大部分空间
+        # 将IMU放在(1,1)位置，即右下角，大小为400x400
+        display_imu_layout.addWidget(self.display, 0, 0, 2, 2)  # 跨越2行2列
+        display_imu_layout.addWidget(self.imu, 1, 1, 1, 1)      # 放在右下角
+        
+        # 设置IMU控件的对齐方式为右下角
+        display_imu_layout.setAlignment(self.imu, Qt.AlignRight | Qt.AlignBottom)
+        
+        # 设置display的拉伸因子，让它占据大部分空间
+        # 由于IMU控件较大(400x400)，需要调整拉伸比例
+        display_imu_layout.setRowStretch(0, 3)  # 第一行占据更多空间
+        display_imu_layout.setRowStretch(1, 1)  # 第二行占据较少空间
+        display_imu_layout.setColumnStretch(0, 3)  # 第一列占据更多空间
+        display_imu_layout.setColumnStretch(1, 1)  # 第二列占据较少空间
+        
+        main_layout.addLayout(display_imu_layout)
+        
+        self.waveform = WaveformWidget()
+        main_layout.addWidget(self.waveform)
+        
+        self.testButton = PushButton("测试本地视频解码")
         self.testButton.clicked.connect(self.test)
-        self.startButton=PushButton("连接服务器")
+        self.startButton = PushButton("连接服务器")
         self.startButton.clicked.connect(self.startSignal.emit)
-        self.sendTestVideoButton=PushButton("发送摄像头视频")
+        self.sendTestVideoButton = PushButton("发送摄像头视频")
         self.sendTestVideoButton.clicked.connect(self.sendTestVideoSignal.emit)
-        layout.addWidget(self.testButton)
-        layout.addWidget(self.startButton)
-        layout.addWidget(self.sendTestVideoButton)
+        main_layout.addWidget(self.testButton)
+        main_layout.addWidget(self.startButton)
+        main_layout.addWidget(self.sendTestVideoButton)
         
+        self.setLayout(main_layout)
         
-
-        self.setLayout(layout)
-        
-        self.__frame=None
+        self.__frame = None
 
 
 
@@ -241,7 +267,7 @@ if __name__=="__main__":
 
     app=QApplication(sys.argv)
 
-    m=Monitor()
+    m=Monitor(Setting())
     m.show()
 
     app.exec()
