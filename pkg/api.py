@@ -7,7 +7,7 @@ from pkg.model import Device,DeviceResponse,Version,VersionResponse,Setting
 
 
 class API:
-    def __init__(self, setting: Setting):
+    def __init__(self, setting: Setting,parent=None):
         self.base_url = setting.base_url
         self.user_agent = setting.user_agent
         self.token = setting.token

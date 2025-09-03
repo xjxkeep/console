@@ -5,7 +5,7 @@ from typing import ClassVar as _ClassVar, Optional as _Optional
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class VideoAttributeMessage(_message.Message):
-    __slots__ = ("width", "height", "max_rate", "frame_rate", "video_encode_type")
+    __slots__ = ["width", "height", "max_rate", "frame_rate", "video_encode_type"]
     WIDTH_FIELD_NUMBER: _ClassVar[int]
     HEIGHT_FIELD_NUMBER: _ClassVar[int]
     MAX_RATE_FIELD_NUMBER: _ClassVar[int]

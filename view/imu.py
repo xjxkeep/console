@@ -7,6 +7,7 @@ from PyQt5.QtGui import QFont
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from PyQt5.QtOpenGL import QGLWidget
+from protocol.highway_pb2 import DeviceParam,IMUParam
 
 class IMUVisualizer(QGLWidget):
     """IMU姿态可视化控件"""
@@ -304,7 +305,7 @@ class IMUVisualizer(QGLWidget):
         
         glPopMatrix()
 
-    def update_orientation_from_sensors(self, accel, gyro, dt=0.05):
+    def update_orientation_from_sensors(self, data:IMUParam, dt=0.05):
         """
         从加速度计和陀螺仪数据更新姿态角
         accel: 三轴加速度 [ax, ay, az]
@@ -312,14 +313,14 @@ class IMUVisualizer(QGLWidget):
         dt: 时间间隔 (秒)
         """
         # 从加速度计算俯仰角和滚转角
-        ax, ay, az = accel
+        ax, ay, az = (data.acceleration_x, data.acceleration_y, data.acceleration_z)
         
         # 计算俯仰角 (pitch) 和滚转角 (roll)
         pitch_acc = np.arctan2(ax, np.sqrt(ay**2 + az**2)) * 180 / np.pi
         roll_acc = np.arctan2(-ay, az) * 180 / np.pi
         
         # 从陀螺仪积分获取角度变化
-        gx, gy, gz = gyro
+        gx, gy, gz = data.gyroscope_x, data.gyroscope_y, data.gyroscope_z
         self.roll += gx * dt
         self.pitch += gy * dt
         self.yaw += gz * dt
@@ -348,8 +349,7 @@ class IMUWidget(QWidget):
         
         # 创建IMU可视化控件
         self.imu_visualizer = IMUVisualizer()
-        self.accel_inputs = {}
-        self.gyro_inputs = {}
+        self.data=IMUParam()
         # 创建输入控件
         # self.create_input_controls()
         
@@ -410,27 +410,15 @@ class IMUWidget(QWidget):
             gyro_layout.addLayout(hbox)
 
 
-    def update_imu_data(self,data:dict):
+    def update_imu_data(self,data:IMUParam):
         """更新IMU数据"""
-        self.imu_visualizer.update_orientation_from_sensors(data['accel'], data['gyro'])
+        self.data=data
+        self.update_imu()
+    
 
     def update_imu(self):
-        """更新IMU姿态"""
-        # 获取输入的加速度和角速度值
-        accel = [
-            self.accel_inputs.get('X',0),
-            self.accel_inputs.get('Y',0),
-            self.accel_inputs.get('Z',0)
-        ]
-        
-        gyro = [
-            self.gyro_inputs.get('X',0),
-            self.gyro_inputs.get('Y',0),
-            self.gyro_inputs.get('Z',0)
-        ]
-        
-        # 更新IMU姿态
-        self.imu_visualizer.update_orientation_from_sensors(accel, gyro)
+        self.imu_visualizer.update_orientation_from_sensors(self.data)
+
 
 
 if __name__ == "__main__":

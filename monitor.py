@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt,QTimer
 from PyQt5.QtWidgets import *
 from datetime import datetime
 from pkg.quic import HighwayQuicClient
-from protocol.highway_pb2 import Device,Video
+from protocol.highway_pb2 import Device,Video,DeviceParam
 from pkg.codec import H264Decoder
 import time
 import threading
@@ -214,6 +214,10 @@ class Monitor(QWidget):
         self.latency=0
         self.statusBar.param_changed.connect(self.param_changed)
     
+    def update_device_param(self,data:DeviceParam):
+        print(data)
+        self.imu.update_imu_data(data.imu_param)
+
     def update_wave_form(self,value:np.ndarray):
         self.waveform.set_data(value)
     

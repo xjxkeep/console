@@ -54,11 +54,11 @@ class MainWindow(FluentWindow):
         self.setupUi() 
         # 初始化 API 实例
         self.api = API(self.setting,self)
-        self.device=self.api.get_device_info()
-        if self.device is not None: 
-            self.setting.source_device_id=self.device.device_id
-            self.setting.token=self.device.token
-            self.setting.device_id=self.device.subscribe_id
+        # self.device=self.api.get_device_info()
+        # if self.device is not None: 
+        #     self.setting.source_device_id=self.device.device_id
+        #     self.setting.token=self.device.token
+        #     self.setting.device_id=self.device.subscribe_id
             
         
             
@@ -73,6 +73,7 @@ class MainWindow(FluentWindow):
         self.quic_client.receive_video.connect(self.update_monitor)
         self.quic_client.latency.connect(self.monitor.update_latency)
         self.quic_client.input_wave_data.connect(self.monitor.update_wave_form)  
+        self.quic_client.device_param_ready.connect(self.monitor.update_device_param)
         
         
         
@@ -148,7 +149,7 @@ class MainWindow(FluentWindow):
         print("client closed")    
         self.controller.close()
         print("controller closed")
-        self.api.close()
+        # self.api.close()
         
         return super().closeEvent(a0)
 
