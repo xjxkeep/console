@@ -104,6 +104,8 @@ class H264Encoder(QObject):
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             fps = int(cap.get(cv2.CAP_PROP_FPS))
+            if fps == 0:
+                fps = 30
             print("width:",width,"height:",height,"fps:",fps)
 
             # 创建输出容器

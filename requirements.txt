@@ -7,9 +7,9 @@ uuid
 pyinstaller
 opencv-python
 qrcode
-pyaudio
+sounddevice
 numpy
-pyav
+av
 aiomqtt
 requests
 pydantic

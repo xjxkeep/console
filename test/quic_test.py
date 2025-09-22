@@ -13,7 +13,6 @@ client=HighwayQuicClient(setting)
 client.start()
 client.send_video_test()
 
-
 time.sleep(10)
 
 client.close()
