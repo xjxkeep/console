@@ -5,7 +5,6 @@ from PyQt5.QtWidgets import *
 import sys
 from PyQt5.QtCore import QTimer,QEventLoop
 from pkg.joystick import JoyStick
-import threading
 from view.info import DeviceInfo
 
 class GuideButtonGroup(QWidget):

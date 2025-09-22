@@ -73,7 +73,10 @@ class MQTTClient:
                 self.client.on_connect=self.__on_connect
             except Exception as e:
                 print("mqtt client connect error",e)
-                time.sleep(1)
+                for _ in range(100):
+                    if not self.running:
+                        break
+                    time.sleep(0.01)
                 continue
             while self.running:
                 try:

@@ -4,7 +4,38 @@ import base64
 import time
 import json
 from pkg.model import Device,DeviceResponse,Version,VersionResponse,Setting
+from PyQt5.QtCore import QObject, QThread
 
+
+class Promise(QThread):
+    
+    def __init__(self, func: callable,parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self.func=func
+        self._then=None
+        self._error=None
+    
+    
+    def run(self):
+        try:
+            print("promise run")
+            resp=self.func()
+            print("promise response",resp)
+            if self._then:
+                self._then(resp)
+        except Exception as e:
+            print("promise error",e)
+            if self._error:
+                self._error(e)
+    
+    def then(self,func:callable):
+        print("promise then",func)
+        self._then=func
+        return self
+
+    def error(self,func:callable):
+        self._error=func
+        return self
 
 class API:
     def __init__(self, setting: Setting,parent=None):
@@ -13,7 +44,15 @@ class API:
         self.token = setting.token
         self.source_device_id = setting.source_device_id
         self.arch = setting.arch
-        
+    
+    def Hi(self) -> Promise:
+        def hi():
+            time.sleep(1)
+            return "hello world"
+        p=Promise(hi,self)
+        return p
+    
+    
     def generate_sign(self, timestamp: int, path: str, payload: str = "") -> str:
         """
         生成签名
@@ -106,3 +145,8 @@ class API:
         response.raise_for_status()
         response = VersionResponse.model_validate_json(json_data=response.content)
         return response.data
+    
+    
+    def close(self):
+        self.deleteLater()
+        print("api closed")

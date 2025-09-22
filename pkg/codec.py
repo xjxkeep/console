@@ -1,6 +1,6 @@
 import av
 import cv2
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtCore import QObject, pyqtSignal,pyqtSlot
 import numpy as np
 import copy
 import threading
@@ -11,6 +11,7 @@ from queue import Queue
 from PyQt5.QtGui import QImage, QPixmap
 
 from pkg.buffer import BufferStream
+
 
 
 class H264Decoder(QObject):
@@ -26,8 +27,6 @@ class H264Decoder(QObject):
         self.stream=BufferStream()
         self.frames=Queue()
         self.format=format
-        self.decode_thread = threading.Thread(target=self.__decode_frames,daemon=True)
-        self.decode_thread.start()
         self.has_data = False
         self.running = True
         
@@ -35,7 +34,6 @@ class H264Decoder(QObject):
     def close(self):
         self.running = False
         self.stream.close()
-        self.decode_thread.join()
 
     def write(self, data):
         if len(data)==0:
@@ -45,19 +43,8 @@ class H264Decoder(QObject):
     def get_frame(self):
         return self.frames.get()
     
-    def change_format(self,format):
-        self.format=format
-        self.running=False
-        self.stream.close()
-        self.decode_thread.join()
-        self.running=True
-        self.stream=BufferStream()
-        self.decode_thread = threading.Thread(target=self.__decode_frames)
-        self.decode_thread.start()
-    
-    
-    
-    def __decode_frames(self):
+    @pyqtSlot()
+    def frame_decode_task(self):
         print("start decode video with format",self.transform_map[self.format])
         self.container = av.open(self.stream,format=self.transform_map[self.format],buffer_size=1024*1024*10)
         
@@ -90,15 +77,11 @@ class H264Encoder(QObject):
         self.buffer=BufferStream()
         self.running = True
         
-        self.encode_thread = threading.Thread(target=self.__encode_frames,daemon=True)
-    def start(self):
-        self.running = True
-        self.encode_thread.start()
+      
     def close(self):
         self.running = False
         self.buffer.close()
-        if self.encode_thread.is_alive():
-            self.encode_thread.join()
+        
         
     def write(self,data):
         self.buffer.write(data)
@@ -107,9 +90,9 @@ class H264Encoder(QObject):
     def read_frame(self):
         return self.buffer.readSingle()
     
-    
-    def __encode_frames(self):
-        
+    @pyqtSlot()
+    def frame_encode_task(self):
+        self.running = True
         while self.running:
             print("start encode")
             cap = cv2.VideoCapture(0)
@@ -130,7 +113,7 @@ class H264Encoder(QObject):
             stream.height = height
             stream.pix_fmt = 'yuv420p'
             stream.gop_size=30
-            # def read_frame():
+
             while self.running:
                 ret, frame = cap.read()
                 if not ret:
@@ -142,7 +125,8 @@ class H264Encoder(QObject):
                 # 编码并写入输出文件
                 for packet in stream.encode(video_frame):
                     output_container.mux(packet)
-
+            output_container.close()
+            cap.release()
 
 
 

@@ -2,7 +2,6 @@ from PyQt5.QtWidgets import *
 from qfluentwidgets import *
 from PyQt5.QtCore import Qt
 import os
-import threading
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QApplication
  # Generate QR code using qrcode library

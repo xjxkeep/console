@@ -5,7 +5,6 @@ from PyQt5.QtWidgets import *
 import sys
 from PyQt5.QtCore import QTimer
 from pkg.joystick import JoyStick  
-import threading
 from pkg.model import Setting
 class Channel(QWidget):
     channelSignal=pyqtSignal(int)

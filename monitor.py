@@ -8,7 +8,6 @@ from pkg.quic import HighwayQuicClient
 from protocol.highway_pb2 import Device,Video,DeviceParam
 from pkg.codec import H264Decoder
 import time
-import threading
 from view.wave import WaveformWidget
 import numpy as np
 from pkg.model import Setting
@@ -160,7 +159,6 @@ class Monitor(QWidget):
         
         self.display = QLabel("无信号，等待客户端连接...")
         self.display.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.display.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self.display.setStyleSheet("background-color: rgb(0,0,0);color: rgb(255,255,255);")
         
         self.imu = IMUWidget()
@@ -185,13 +183,11 @@ class Monitor(QWidget):
         self.waveform = WaveformWidget()
         main_layout.addWidget(self.waveform)
         
-        self.testButton = PushButton("测试本地视频解码")
-        self.testButton.clicked.connect(self.test)
+  
         self.startButton = PushButton("连接服务器")
         self.startButton.clicked.connect(self.startSignal.emit)
         self.sendTestVideoButton = PushButton("发送摄像头视频")
         self.sendTestVideoButton.clicked.connect(self.sendTestVideoSignal.emit)
-        main_layout.addWidget(self.testButton)
         main_layout.addWidget(self.startButton)
         main_layout.addWidget(self.sendTestVideoButton)
         
@@ -227,17 +223,7 @@ class Monitor(QWidget):
     def update_download_speed(self,value:float):
         self.statusBar.update_download_speed(value)
     
-    def test(self):
-        threading.Thread(target=self.videoDecodeTest,daemon=True).start()
-    
-    def videoDecodeTest(self):
-        with open(r"output.h264","rb") as f:
-            while True:
-                data=f.read(9600)
-                if not data:
-                    break
-                self.decoder.write(data)
-                time.sleep(0.005)
+
   
     def update_latency(self,value:int):
         self.statusBar.update_latency(value)

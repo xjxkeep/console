@@ -7,11 +7,10 @@ from aioquic.asyncio.client import connect
 from aioquic.asyncio.protocol import QuicConnectionProtocol
 from aioquic.quic.configuration import QuicConfiguration
 from aioquic.quic.events import QuicEvent,ConnectionTerminated
-from PyQt5.QtCore import QObject,pyqtSignal
+from PyQt5.QtCore import QObject, QThread,pyqtSignal,pyqtSlot
 from google.protobuf.message import Message
 from protocol.highway_pb2 import Register,Device,Control,Video,File,Audio,DeviceParam
 import time
-import threading
 from asyncio import Queue
 import os
 from pkg.audio import AudioRecorder,AudioPlayer
@@ -86,8 +85,8 @@ class HighwayQuicClient(QObject):
         self.running = False
         self.upload_bytes = 0
         self.download_bytes = 0
-        self.decoder=H264Decoder()
-        self.decoder.frame_decoded.connect(self.receive_video.emit)
+        self.main_thread=QThread()
+        
         
         self.control_stream_queue=Queue()
         self.latency_sum=0
@@ -99,18 +98,58 @@ class HighwayQuicClient(QObject):
         self.video_stream_failed.connect(self.reconnect_video_stream)
         self.control_stream_failed.connect(self.reconnect_control_stream)
         
-        self.video_encoder=H264Encoder()
-        self.video_encoder.frame_encoded.connect(self.send_video_test_data)
         
-        self.audio_encoder=AudioRecorder(format="g726")
-        self.audio_player=AudioPlayer(format="g726")
+        # 视频解码
+        self.video_decoder_thread=QThread()
+        self.video_decoder_worker=H264Decoder()
+        self.video_decoder_worker.frame_decoded.connect(self.receive_video)
+        self.video_decoder_worker.moveToThread(self.video_decoder_thread)
+        self.video_decoder_thread.started.connect(self.video_decoder_worker.frame_decode_task)
+        self.video_decoder_thread.finished.connect(self.video_decoder_worker.deleteLater)
+        
+        # 视频编码
+        self.video_encoder_thread=QThread()
+        self.video_encoder_worker=H264Encoder()
+        self.video_encoder_worker.frame_encoded.connect(self.send_video_test_data)
+        self.video_encoder_worker.moveToThread(self.video_encoder_thread)
+        self.video_encoder_thread.started.connect(self.video_encoder_worker.frame_encode_task)
+        self.video_encoder_thread.finished.connect(self.video_encoder_worker.deleteLater)
+        
+        
+        # 音频编码和播放
+        self.audio_encoder_worker=AudioRecorder(format="g726")
+        self.audio_player_worker=AudioPlayer(format="g726")
+        self.audio_encoder_thread=QThread()
+        self.audio_player_thread=QThread()
+        self.audio_encoder_worker.moveToThread(self.audio_encoder_thread)
+        self.audio_player_worker.moveToThread(self.audio_player_thread)
+        self.audio_encoder_thread.started.connect(self.audio_encoder_worker.run_task)
+        self.audio_player_thread.started.connect(self.audio_player_worker.run_task)
+        self.audio_encoder_thread.finished.connect(self.audio_encoder_worker.deleteLater)
+        self.audio_player_thread.finished.connect(self.audio_player_worker.deleteLater)
+        
+
         
         self.tasks: List[asyncio.Task] = []
         
     
     def change_video_format(self,format):
-        if format!=self.decoder.format:
-            self.decoder.change_format(format)
+        if format!=self.video_decoder_worker.format:
+            self.video_decoder_worker.frame_decoded.disconnect()
+            self.video_decoder_worker.close()
+            self.video_decoder_thread.quit()
+            self.video_decoder_thread.started.disconnect()
+            self.video_decoder_thread.wait() # TODO 耗时高的话就不wait了 应该也没问题
+            
+            self.video_decoder_thread=QThread()
+            self.video_decoder_worker=H264Decoder(format=format)
+            self.video_decoder_worker.moveToThread(self.video_decoder_thread)
+            self.video_decoder_thread.started.connect(self.video_decoder_worker.frame_decode_task)
+            self.video_decoder_thread.finished.connect(self.video_decoder_worker.deleteLater)
+            self.video_decoder_worker.frame_decoded.connect(self.receive_video)
+            self.video_decoder_thread.start()
+            
+            
 
     def reconnect_video_stream(self):
         print("reconnect video stream")
@@ -189,22 +228,17 @@ class HighwayQuicClient(QObject):
         """Start the client in a new thread"""
         if self.running:
             return
-            
         self.running = True
         self.loop = asyncio.new_event_loop()
-        
-        # Start event loop in new thread
-        self.run_thread= threading.Thread(
-            target=self._run_event_loop,
-            daemon=True
-        )
-        self.run_thread.start()
+        self.moveToThread(self.main_thread)
+        self.main_thread.started.connect(self._run_event_loop)
+        self.main_thread.start()
 
     def close(self):
         """Stop the client and cleanup resources"""
         if not self.running:
             return
-            
+        self.disconnect()
         self.running = False
         # 取消所有异步任务
         for task in self.tasks:
@@ -214,30 +248,47 @@ class HighwayQuicClient(QObject):
             self.client.close()
             asyncio.run_coroutine_threadsafe(self.client.wait_closed(),self.loop).result()
             print("client closed")
-        self.video_encoder.close()
+        self.video_encoder_worker.frame_encoded.disconnect()
+        self.video_encoder_worker.close()
+        if self.video_encoder_thread.isRunning():
+            self.video_encoder_thread.quit()
+            self.video_encoder_thread.wait()
         print("video encoder closed")
-        self.audio_encoder.close()
+
+
+        self.video_decoder_worker.frame_decoded.disconnect()
+        self.video_decoder_worker.close()
+        if self.video_decoder_thread.isRunning():
+            self.video_decoder_thread.quit()
+            self.video_decoder_thread.wait()
+        print("video decoder closed")
+
+        self.audio_encoder_worker.close()
+        if self.audio_encoder_thread.isRunning():
+            self.audio_encoder_thread.quit()
+            self.audio_encoder_thread.wait()
         print("audio encoder closed")
-        self.decoder.close()
-        print("decoder closed")
-        self.audio_player.close()
+       
+        self.audio_player_worker.close()
+        if self.audio_player_thread.isRunning():
+            self.audio_player_thread.quit()
+            self.audio_player_thread.wait()
         print("audio player closed")
         
         
-        self.clear_tasks()
-        # Stop the event loop
+        # # Stop the event loop
         if self.loop and self.loop.is_running():
             self.loop.call_soon_threadsafe(self.loop.stop)
-        
         print("loop stop")
         # Wait for the thread to finish
-        if self.run_thread:
-            self.run_thread.join()
-        print("thread quit")
-        # Close the loop if it's not already closed
-        if self.loop and not self.loop.is_closed():
-            self.loop.close()
-            print("loop close")
+        if self.main_thread.isRunning():
+            self.main_thread.quit()
+            self.main_thread.wait()
+        print("main thread quit")
+        
+        
+        
+        
 
     async def __update_speed(self):
         while self.running:
@@ -248,6 +299,7 @@ class HighwayQuicClient(QObject):
             self.download_bytes = 0
             await asyncio.sleep(1)
     
+    @pyqtSlot()
     def _run_event_loop(self):
         """Run the event loop in a separate thread"""
         asyncio.set_event_loop(self.loop)
@@ -271,8 +323,7 @@ class HighwayQuicClient(QObject):
             if not task.done():
                 task.cancel()
         self.tasks=[]
-        self.audio_encoder.close()
-        self.audio_player.close()
+       
         
     
     async def run(self):
@@ -298,10 +349,11 @@ class HighwayQuicClient(QObject):
                     self.create_task(self.establish_video_stream())
                     self.create_task(self.establish_control_stream())
                     self.create_task(self.establish_file_stream())
-                    self.create_task(self.establish_audio_stream())
                     self.create_task(self.establish_imu_stream())
-                    self.audio_encoder.start()
-                    self.audio_player.start()
+                    
+                    self.create_task(self.establish_audio_stream())
+                    self.audio_encoder_thread.start()
+                    self.audio_player_thread.start()
                     # Keep connection alive
                     while self.running:
                         # Check if client is still connected
@@ -412,7 +464,7 @@ class HighwayQuicClient(QObject):
                 audio=Audio.FromString(message)
                 self.input_wave_data.emit(np.frombuffer(audio.raw,dtype=np.int16))
                 if audio.raw:
-                    self.audio_player.write(audio.raw)
+                    self.audio_player_worker.write(audio.raw)
         except asyncio.CancelledError:
             print("__read_audio_stream canceled")
         except Exception as e:
@@ -427,7 +479,7 @@ class HighwayQuicClient(QObject):
         print("__send_audio_stream starting to send data")
         try:
             while self.running:
-                data=await self.audio_encoder.read_async()
+                data=await self.audio_encoder_worker.read_async()
                 if len(data) == 0:
                     await asyncio.sleep(0.01)  # 短暂等待避免忙等待
                     continue
@@ -460,13 +512,12 @@ class HighwayQuicClient(QObject):
         print("send video register message ",register_msg)
         await self.send_message(writer=self.video_writer,message=register_msg)
 
-        # Start message reading task
-        # self.video_encoder.start()
-        # self.loop.create_task(self.send_test(writer=self.video_writer))
+        self.video_decoder_thread.start()
+  
         self.create_task(self.__read_video_stream(reader=self.video_reader))
     
     def send_video_test(self):
-        self.video_encoder.start()
+        self.video_encoder_thread.start()
 
 
     def send_control_message(self, values: list):
@@ -507,7 +558,7 @@ class HighwayQuicClient(QObject):
             print("__send_control_message quit")
     
     def send_video_test_data(self):
-        data = self.video_encoder.read_frame()
+        data = self.video_encoder_worker.read_frame()
         if self.loop and self.running:
             future = asyncio.run_coroutine_threadsafe(
                 self.send_message(writer=self.video_writer, message=Video(raw=data, timestamp=int(time.time()*1000))),
@@ -539,7 +590,7 @@ class HighwayQuicClient(QObject):
                 message = await self.receive_message(reader)
                 video = Video.FromString(message)
                 print("receive message",len(message),"video count:",video.counter)
-                self.decoder.write(video.raw)
+                self.video_decoder_worker.write(video.raw)
                 self.latency_sum+=int(time.time()*1000)-video.timestamp
                 self.latency_count+=1
         except asyncio.CancelledError as e:

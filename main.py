@@ -100,8 +100,9 @@ class MainWindow(FluentWindow):
         
         
     def update_monitor(self):
-        pixmap=self.quic_client.decoder.get_frame()
-        self.monitor.setPixmap(pixmap)
+        if self.quic_client.video_decoder_worker:
+            pixmap=self.quic_client.video_decoder_worker.get_frame()
+            self.monitor.setPixmap(pixmap)
     
     def _handle_hid_response(self,response:HIDBody):
         print("hid response",response)
@@ -143,10 +144,11 @@ class MainWindow(FluentWindow):
         print(self.setting)
         with open(".setting.json", "w") as f:
             json.dump(self.setting.model_dump(), f)
+        self.mqtt_client.close()
+        print("mqtt client closed")   
         self.quic_client.close()
         print("quic client closed")
-        self.mqtt_client.close()
-        print("client closed")    
+        
         self.controller.close()
         print("controller closed")
         # self.api.close()
