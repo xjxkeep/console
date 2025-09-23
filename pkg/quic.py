@@ -102,7 +102,7 @@ class HighwayQuicClient(QObject):
         # 视频解码
         self.video_decoder_thread=QThread()
         self.video_decoder_worker=H264Decoder()
-        self.video_decoder_worker.frame_decoded.connect(self.receive_video)
+        self.video_decoder_worker.frame_decoded.connect(self.receive_video.emit)
         self.video_decoder_worker.moveToThread(self.video_decoder_thread)
         self.video_decoder_thread.started.connect(self.video_decoder_worker.frame_decode_task)
         self.video_decoder_thread.finished.connect(self.video_decoder_worker.deleteLater)
@@ -146,7 +146,7 @@ class HighwayQuicClient(QObject):
             self.video_decoder_worker.moveToThread(self.video_decoder_thread)
             self.video_decoder_thread.started.connect(self.video_decoder_worker.frame_decode_task)
             self.video_decoder_thread.finished.connect(self.video_decoder_worker.deleteLater)
-            self.video_decoder_worker.frame_decoded.connect(self.receive_video)
+            self.video_decoder_worker.frame_decoded.connect(self.receive_video.emit)
             self.video_decoder_thread.start()
             
             
@@ -589,7 +589,6 @@ class HighwayQuicClient(QObject):
             while self.running:
                 message = await self.receive_message(reader)
                 video = Video.FromString(message)
-                print("receive message",len(message),"video count:",video.counter)
                 self.video_decoder_worker.write(video.raw)
                 self.latency_sum+=int(time.time()*1000)-video.timestamp
                 self.latency_count+=1
