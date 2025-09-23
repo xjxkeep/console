@@ -14,3 +14,6 @@ aiomqtt
 requests
 pydantic
 pyshortcuts
+hidapi
+pyopengl
+pillow

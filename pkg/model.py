@@ -64,3 +64,5 @@ class Setting(BaseModel):
     channels: list[int] = [0]*10 
     window_width: int = 600
     window_height: int = 800
+    window_x: int = 0
+    window_y: int = 0

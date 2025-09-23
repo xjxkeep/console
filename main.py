@@ -1,23 +1,22 @@
-from PyQt5.QtGui import QCloseEvent
-from PyQt5.QtCore import QTimer, Qt
-from monitor import Monitor
-from controller import Controller
-from debug import Debug
-from about import About
-from setting import SettingView
-# from guide import Guide
-import sys
-from PyQt5.QtWidgets import QApplication,QDialog,QInputDialog,QSizePolicy
-from qfluentwidgets.window import FluentWindow
-from qfluentwidgets.common import FluentIcon
-from pkg.mqtt import MQTTClient
-from pkg.quic import HighwayQuicClient
-from pkg.api import API
-from pkg.version_manager import VersionManager
-from protocol.highway_pb2 import Device
+
 import json
 import os
-from pkg.model import HIDBody,Setting
+import sys
+
+from PyQt5.QtCore import QThread, Qt, pyqtSignal
+from PyQt5.QtGui import QCloseEvent
+from PyQt5.QtWidgets import QApplication, QSplashScreen, QVBoxLayout, QWidget
+from qfluentwidgets import BodyLabel
+from qfluentwidgets.common import FluentIcon
+from qfluentwidgets.window import FluentWindow
+
+from loader import SplashScreen
+from pkg.api import API
+from pkg.model import HIDBody, Setting
+from pkg.mqtt import MQTTClient
+from pkg.quic import HighwayQuicClient
+from pkg.version_manager import VersionManager
+
 # TODO
 # 1. 封装下请求的host 等参数 统一管理 后面host走下发
 # 2. 界面完善
@@ -27,14 +26,19 @@ class MainWindow(FluentWindow):
     
     
     def setupUi(self):
-     
-        
+        from monitor import Monitor
+        from controller import Controller
+        from debug import Debug
+        from about import About
+        from setting import SettingView    
         self.monitor=Monitor(self.setting)
         self.controller=Controller(self.setting)
         self.debug=Debug(self.setting)
         self.about=About()
         self.settingView=SettingView()
         self.resize(self.setting.window_width,self.setting.window_height)
+        if self.setting.window_x != 0 and self.setting.window_y != 0:
+            self.move(self.setting.window_x,self.setting.window_y)
         
 
         self.addSubInterface(self.monitor,FluentIcon.MOVIE, "Monitor")
@@ -141,6 +145,7 @@ class MainWindow(FluentWindow):
         print("mainwindow closeEvent")    
         self.setting.channels=self.controller.getChannelValues()
         self.setting.window_height,self.setting.window_width=self.height(),self.width()
+        self.setting.window_x,self.setting.window_y=self.x(),self.y()
         print(self.setting)
         with open(".setting.json", "w") as f:
             json.dump(self.setting.model_dump(), f)
@@ -156,8 +161,12 @@ class MainWindow(FluentWindow):
         return super().closeEvent(a0)
 
 app=QApplication(sys.argv)
-
+splash = SplashScreen()
+splash.show()
+app.processEvents()
 m=MainWindow()
+splash.loading_complete()
+splash.finish(m)
 m.show()
 
 app.exec()
