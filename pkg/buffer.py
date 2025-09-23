@@ -7,37 +7,8 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 executor = ThreadPoolExecutor(max_workers=1)
 
-class RingBuffer:
-    def __init__(self,maxSize=1024*1024,blocked=True,timeout=None):
-        self.maxSize=maxSize
-        self.blocked=blocked
-        self.timeout=timeout
-        self.buffer=[b'0' for _ in range(maxSize)]
-        self.semaphore = threading.Semaphore(0)
-        self.running = True
-        self.pos=0
-
-    def read(self,n):
-        self.semaphore.acquire(n)
-        data=self.buffer[self.pos:self.pos+n]
-        self.pos=(self.pos+n)%self.maxSize
-        if data is None:
-            return data
-        return data
-
-    def write(self,data):
-        if len(data)+self.pos>self.maxSize:
-            self.buffer[self.pos:]=data[self.maxSize-self.pos:]
-            self.buffer[:len(data)-self.maxSize+self.pos]=data[:self.maxSize-self.pos]
-        else:
-            self.buffer[self.pos:self.pos+len(data)]=data[:]
-        self.semaphore.release(len(data))
 
      
-
-     
-
-
 class BufferStream:
     
     def __init__(self,maxSize=0,blocked=True,timeout=None):
@@ -88,7 +59,6 @@ class BufferStream:
     
   
     def read(self, n):
-        
         return self.__read()
     
     def write(self, data):
@@ -99,45 +69,3 @@ class BufferStream:
         self.running = False
         self.semaphore.release(1024)
         self.buffer.clear()
-
-class RingBytesIO:
-    def __init__(self,maxSize=0,blocked=True,timeout=None):
-        self.maxSize=maxSize
-        self.blocked=blocked
-        self.timeout=timeout
-        self.buffer=io.BytesIO()
-        self.semaphore = threading.Semaphore(0)
-        self.running = True
-        self.lock = threading.Lock()
-        self.read_pos=0
-        self.read_count=0
-        self.read_latency=0.0
-        self.write_count=0
-        self.write_latency=0.0
-    
-    def read(self,n):
-        with self.lock:
-            self.buffer.seek(self.read_pos)
-            data=self.buffer.read(n)
-            start_time=time.time()
-            self.read_pos+=len(data)
-            if self.read_pos>1024*1024:
-                self.buffer=io.BytesIO(self.buffer.getvalue()[self.read_pos:])
-                self.read_pos=0 
-            self.read_latency+=time.time()-start_time
-            self.read_count+=1
-            return data
-        
-    def write(self,data):
-        start_time=time.time()
-        with self.lock:
-            self.buffer.write(data)
-            self.write_count+=1
-            self.write_latency+=time.time()-start_time
-            self.semaphore.release(len(data))
-            return len(data)
-    def close(self):
-        self.running = False
-        self.semaphore.release(1024)
-        self.buffer.close()
-
