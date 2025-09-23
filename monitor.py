@@ -137,9 +137,8 @@ class StatusBar(QWidget):
 
 
 
-
+# TODO imu 显示会导致无法resize窗口
 class Monitor(QWidget):
-    # TODO 视频解码卡顿
     startSignal=pyqtSignal()
     sendTestVideoSignal=pyqtSignal()
     param_changed=pyqtSignal(dict)
@@ -161,15 +160,15 @@ class Monitor(QWidget):
         self.display.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.display.setStyleSheet("background-color: rgb(0,0,0);color: rgb(255,255,255);")
         
-        self.imu = IMUWidget()
+        # self.imu = IMUWidget()
         
         # 将display放在(0,0)位置，占据大部分空间
         # 将IMU放在(1,1)位置，即右下角，大小为400x400
         display_imu_layout.addWidget(self.display, 0, 0, 2, 2)  # 跨越2行2列
-        display_imu_layout.addWidget(self.imu, 1, 1, 1, 1)      # 放在右下角
+        # display_imu_layout.addWidget(self.imu, 1, 1, 1, 1)      # 放在右下角
         
         # 设置IMU控件的对齐方式为右下角
-        display_imu_layout.setAlignment(self.imu, Qt.AlignRight | Qt.AlignBottom)
+        # display_imu_layout.setAlignment(self.imu, Qt.AlignRight | Qt.AlignBottom)
         
         # 设置display的拉伸因子，让它占据大部分空间
         # 由于IMU控件较大(400x400)，需要调整拉伸比例
@@ -212,7 +211,7 @@ class Monitor(QWidget):
     
     def update_device_param(self,data:DeviceParam):
         print(data)
-        self.imu.update_imu_data(data.imu_param)
+        # self.imu.update_imu_data(data.imu_param)
 
     def update_wave_form(self,value:np.ndarray):
         self.waveform.set_data(value)
