@@ -6,9 +6,9 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class VersionPublishMessage(_message.Message):
-    __slots__ = ["version", "release_date", "size", "content_md5", "url", "changelog", "arch"]
+    __slots__ = ("version", "release_date", "size", "content_md5", "url", "changelog", "arch")
     class ARCH(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
-        __slots__ = []
+        __slots__ = ()
         ALL: _ClassVar[VersionPublishMessage.ARCH]
         ARM32: _ClassVar[VersionPublishMessage.ARCH]
         ARM64: _ClassVar[VersionPublishMessage.ARCH]

@@ -20,3 +20,4 @@ build/
 *.h264
 application
 .setting.json
+logs/

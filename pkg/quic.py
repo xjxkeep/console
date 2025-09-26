@@ -16,6 +16,7 @@ import os
 from pkg.audio import AudioRecorder,AudioPlayer
 import numpy as np
 from pkg.model import Setting
+from pkg.metric import add_metric
 def generate_crc8_table():
     crc8_table = [0] * 256
     for i in range(256):
@@ -90,6 +91,8 @@ class HighwayQuicClient(QObject):
         
         self.control_stream_queue=Queue()
         self.latency_sum=0
+        self.frame_latency_sum=0
+        self.frame_slice_count=0
         self.latency_count=0
         # QUIC configuration
         self.configuration = QuicConfiguration(alpn_protocols=["HLD"], is_client=True)
@@ -591,7 +594,16 @@ class HighwayQuicClient(QObject):
                 video = Video.FromString(message)
                 self.video_decoder_worker.write(video.raw)
                 self.latency_sum+=int(time.time()*1000)-video.timestamp
+                self.frame_latency_sum+=int(time.time()*1000)-video.timestamp
+                if video.slice_id == video.slice_count-1:
+                    add_metric("frame_latency (ms)",self.frame_latency_sum)
+                    add_metric("frame_slice_count",video.slice_count)
+                    add_metric("nalu_type",video.nalu_type.numerator)
+                    self.frame_latency_sum=0
+                add_metric("protobuf latency (ms)",int(time.time()*1000)-video.timestamp)
+                
                 self.latency_count+=1
+
         except asyncio.CancelledError as e:
             print("_read_video_stream ",e)
         except Exception as e:
