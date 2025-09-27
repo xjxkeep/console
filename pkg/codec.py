@@ -11,7 +11,7 @@ from queue import Queue
 from PyQt5.QtGui import QImage, QPixmap
 
 from pkg.buffer import BufferStream
-from pkg.metric import add_metric
+from pkg.metric import *
 
 
 class H264Decoder(QObject):
@@ -41,6 +41,7 @@ class H264Decoder(QObject):
         self.stream.write(data)
 
     def get_frame(self):
+        DECODER_FIFO_SIZE.dec()
         return self.frames.get()
     
     @pyqtSlot()
@@ -50,10 +51,8 @@ class H264Decoder(QObject):
         
         try:
             while self.running:
-                t1=int(time.time()*1000)
                 for frame in self.container.decode(video=0):
-                    add_metric("decode latency (ms)",int(time.time()*1000)-t1)
-                    t1=int(time.time()*1000)
+                    DECODE_FRAME_COUNT.inc()
                     image=frame.to_ndarray(format='rgb24')
                     height, width, _ = image.shape
                     bytes_per_line = 3 * width
@@ -61,6 +60,7 @@ class H264Decoder(QObject):
                     # Convert QImage to QPixmap
                     pixmap = QPixmap.fromImage(q_img)
                     self.frames.put(pixmap)
+                    DECODER_FIFO_SIZE.inc()
                     self.frame_decoded.emit()
                     if not self.running:
                         print("video decode thread exit")

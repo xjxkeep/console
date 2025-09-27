@@ -16,7 +16,7 @@ import os
 from pkg.audio import AudioRecorder,AudioPlayer
 import numpy as np
 from pkg.model import Setting
-from pkg.metric import add_metric
+from pkg.metric import *
 def generate_crc8_table():
     crc8_table = [0] * 256
     for i in range(256):
@@ -183,6 +183,7 @@ class HighwayQuicClient(QObject):
 
         if flush:
             await writer.drain()
+        NETWORK_UPLOAD_BYTES.inc(float(len(header+data)))
         self.upload_bytes+=len(header+data)
         
     async def receive_message(self,reader:asyncio.StreamReader):
@@ -193,6 +194,7 @@ class HighwayQuicClient(QObject):
         while True:
             b = await reader.readexactly(1)
             self.download_bytes+=1
+            NETWORK_DOWNLOAD_BYTES.inc(float(1))
             if b[0] == 0xff:
                 header[0] = b[0]
                 # 读取剩余3个字节
@@ -201,7 +203,7 @@ class HighwayQuicClient(QObject):
                     remaining = await reader.readexactly(remain_size)
                     header[4-remain_size:] = remaining
                     self.download_bytes+=remain_size
-
+                    NETWORK_DOWNLOAD_BYTES.inc(float(remain_size))
                     
                     # 获取长度并验证CRC
                     length = (header[2]&0xff | (header[3]&0xff)<<8)
@@ -212,6 +214,7 @@ class HighwayQuicClient(QObject):
                         # 读取消息体
                         data = await reader.readexactly(length)
                         self.download_bytes+=length
+                        NETWORK_DOWNLOAD_BYTES.inc(float(length))
                         return data
                     # [ff,a,ff,b]
                     # [ff,b]   i=2  
@@ -354,9 +357,9 @@ class HighwayQuicClient(QObject):
                     self.create_task(self.establish_file_stream())
                     self.create_task(self.establish_imu_stream())
                     
-                    self.create_task(self.establish_audio_stream())
-                    self.audio_encoder_thread.start()
-                    self.audio_player_thread.start()
+                    # self.create_task(self.establish_audio_stream())
+                    # self.audio_encoder_thread.start()
+                    # self.audio_player_thread.start()
                     # Keep connection alive
                     while self.running:
                         # Check if client is still connected
@@ -594,14 +597,9 @@ class HighwayQuicClient(QObject):
                 video = Video.FromString(message)
                 self.video_decoder_worker.write(video.raw)
                 self.latency_sum+=int(time.time()*1000)-video.timestamp
-                self.frame_latency_sum+=int(time.time()*1000)-video.timestamp
-                if video.slice_id == video.slice_count-1:
-                    add_metric("frame_latency (ms)",self.frame_latency_sum)
-                    add_metric("frame_slice_count",video.slice_count)
-                    add_metric("nalu_type",video.nalu_type.numerator)
-                    self.frame_latency_sum=0
-                add_metric("protobuf latency (ms)",int(time.time()*1000)-video.timestamp)
-                
+              
+                VIDEO_PROTOBUF_COUNT.labels(slice_id=video.slice_id,nalu_type=Video.NaluType.Name(video.nalu_type),counter=video.counter).inc()
+                PROTOBUF_LATENCY.labels(type="video").observe(int(time.time()*1000)-video.timestamp)
                 self.latency_count+=1
 
         except asyncio.CancelledError as e:

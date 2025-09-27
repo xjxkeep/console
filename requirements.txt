@@ -17,4 +17,4 @@ pyshortcuts
 hidapi
 pyopengl
 pillow
-tensorboardX
+prometheus_client

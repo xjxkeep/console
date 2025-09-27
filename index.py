@@ -16,6 +16,7 @@ from pkg.model import HIDBody, Setting
 from pkg.mqtt import MQTTClient
 from pkg.quic import HighwayQuicClient
 from pkg.version_manager import VersionManager
+from pkg.metric import *
 
 # TODO
 # 1. 封装下请求的host 等参数 统一管理 后面host走下发
@@ -107,7 +108,8 @@ class MainWindow(FluentWindow):
         if self.quic_client.video_decoder_worker:
             pixmap=self.quic_client.video_decoder_worker.get_frame()
             self.monitor.setPixmap(pixmap)
-    
+            DISPLAY_FRAME_COUNT.inc()
+            
     def _handle_hid_response(self,response:HIDBody):
         print("hid response",response)
         try:
