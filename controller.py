@@ -10,7 +10,7 @@ class Channel(QWidget):
     channelSignal=pyqtSignal(int)
     def setupUi(self):
         layout=QHBoxLayout()
-        self.label=QLabel("Channel")
+        self.label=BodyLabel("Channel")
         self.progressBar=ProgressBar(useAni=False)
         self.fineTune=SpinBox(self)
         self.fineTune.setMinimum(-100)
@@ -140,6 +140,8 @@ class Controller(ScrollArea):
             channel.setFineTune(self.setting.channels[idx] if idx<len(self.setting.channels) else 0)
             layout.addWidget(channel)
         self.widget().setLayout(layout)
+        self.enableTransparentBackground()
+
         self.timer=QTimer(self)
         self.timer.setInterval(500)
         self.timer.timeout.connect(self.__emit_control_message)
@@ -177,8 +179,10 @@ class Controller(ScrollArea):
     
 
 if __name__ == "__main__":
+    from pkg.model import Setting
     app = QApplication(sys.argv)
-    controller = Controller()
+    setTheme(Theme.DARK)
+    controller = Controller(Setting())
     controller.show()
     sys.exit(app.exec_())
         

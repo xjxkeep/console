@@ -23,7 +23,7 @@ class Uploader(QWidget):
         layout.addWidget(self.openFileButton)
         layout.addWidget(self.uploadButton)
 
-        self.fileLabel=QLabel()
+        self.fileLabel=BodyLabel()
         self.fileLabel.setText("No file selected")
         self.layout().addWidget(self.fileLabel)
         self.layout().addLayout(layout)
@@ -74,7 +74,7 @@ class SettingItem(QWidget):
     settingChanged=pyqtSignal(dict)
     def setupUi(self):
         self.setLayout(QHBoxLayout())
-        self.label=QLabel(self.key)
+        self.label=BodyLabel(self.key)
         # Choose widget based on value type
         if isinstance(self.value, bool):
             self.valueEdit = SwitchButton()
@@ -156,6 +156,7 @@ class Debug(ScrollArea):
         self.saveButton.clicked.connect(self.saveSetting)
         layout.addWidget(self.saveButton)
         self.widget().setLayout(layout)
+        self.enableTransparentBackground()
     
     def updateSetting(self,setting:dict):
         for key,value in setting.items():

@@ -23,7 +23,7 @@ class InfoItem(QWidget):
     def setupUi(self):
         self.setObjectName("InfoBox")
         layout=QHBoxLayout()
-        self.label=QLabel(self.label_string or "")
+        self.label=BodyLabel(self.label_string or "")
         self.info=PasswordLineEdit(self) if self.secret else LineEdit(self)
         self.info.setReadOnly(True)
         self.info.setText(self.info_string or "")
@@ -81,7 +81,7 @@ class QRCodeDisplay(QWidget):
         layout=QVBoxLayout()
         self.qrcode=QLabel()
         self.qrcode.setAlignment(Qt.AlignCenter)
-        self.label=QLabel("扫描二维码绑定设备")
+        self.label=BodyLabel("扫描二维码绑定设备")
         self.label.setAlignment(Qt.AlignCenter)
         self.setContent(self.content)
         layout.addWidget(self.label)
@@ -89,7 +89,7 @@ class QRCodeDisplay(QWidget):
         self.setLayout(layout)
 
 
-class HIDDebug(QGroupBox):
+class HIDDebug(HeaderCardWidget):
     hid_response=pyqtSignal(HIDBody)
     def __init__(self,parent=None):
         super().__init__(parent)
@@ -113,7 +113,8 @@ class HIDDebug(QGroupBox):
 
     def setupUi(self):
         self.setObjectName("HIDDebug")
-        self.setLayout(QVBoxLayout())
+        self.setTitle("HID 调试")
+        self.vboxLayout=QVBoxLayout()
         
         self.vendorIdInput=TLineEdit("Vendor ID","0x2207")
         self.productIdInput=TLineEdit("Product ID","0x0019")
@@ -124,14 +125,14 @@ class HIDDebug(QGroupBox):
         self.inputLine.but.clicked.connect(self.send)
         self.inputLine.setPlaceholderText("输入发送内容")
         self.startBut.clicked.connect(self.call_function)
-        self.layout().addWidget(QLabel("HID 调试"))
-        self.layout().addWidget(self.vendorIdInput)
-        self.layout().addWidget(self.productIdInput)
-        self.layout().addWidget(self.startBut)
-        self.layout().addWidget(self.content)
-        self.layout().addWidget(self.inputLine)
-        self.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
-        
+        self.vboxLayout.addWidget(self.vendorIdInput)
+        self.vboxLayout.addWidget(self.productIdInput)
+        self.vboxLayout.addWidget(self.startBut)
+        self.vboxLayout.addWidget(self.content)
+        self.vboxLayout.addWidget(self.inputLine)
+        self.vboxLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.viewLayout.addLayout(self.vboxLayout)
+
 
     def call_function(self):
         try:
@@ -149,15 +150,15 @@ class HIDDebug(QGroupBox):
         
         
 
-class DeviceInfo(QGroupBox):
+class DeviceInfo(HeaderCardWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setupUi()
         
     def setupUi(self):
         self.setObjectName("DeviceInfo")        
+        self.setTitle("设备信息")
         layout=QVBoxLayout()
-        layout.addWidget(QLabel("设备信息"))
         self.qrCodeDisplay=QRCodeDisplay("https://www.baidu.com",self)
         layout.addWidget(self.qrCodeDisplay)
         self.nameBox=InfoItem(self,"设备名称","127.0.0.1:8080")
@@ -166,7 +167,7 @@ class DeviceInfo(QGroupBox):
         layout.addWidget(self.nameBox)
         layout.addWidget(self.versionBox)
         layout.addWidget(self.macBox)
-        self.setLayout(layout)
+        self.viewLayout.addLayout(layout)
     
     def handler_hid_response(self,response:HIDBody):
         self.qrCodeDisplay.setContent(response.returns["id"]+":"+response.returns["sub_id"])
