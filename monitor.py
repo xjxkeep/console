@@ -1,5 +1,5 @@
 from PyQt5.QtCore import Qt,pyqtSignal
-from qfluentwidgets import FluentIcon,FluentIconBase,TransparentPushButton,TransparentToolButton,TransparentDropDownPushButton,RoundMenu,Action,PushButton  
+from qfluentwidgets import FluentIcon,FluentIconBase,TransparentPushButton,TransparentToolButton,TransparentDropDownPushButton,RoundMenu,Action,PushButton,FlowLayout
 from PyQt5.QtGui import QCloseEvent, QIcon,QColor,QImage,QPixmap
 from PyQt5.QtCore import Qt,QTimer
 from PyQt5.QtWidgets import *
@@ -13,6 +13,7 @@ import numpy as np
 from pkg.model import Setting
 from view.video_display import VideoDisplayWidget
 from view.imu import IMUWidget
+
 class StatusBar(QWidget):
     param_changed=pyqtSignal(dict)
     def update(self):
@@ -31,7 +32,7 @@ class StatusBar(QWidget):
         self.signal.setText(f"{value} ms")
     
     def setupUi(self):
-        layout=QHBoxLayout()
+        layout=FlowLayout(self,needAni=False)
         layout.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.signal=TransparentPushButton(FluentIcon.WIFI.icon(color=QColor("green")),"10 ms")
         self.upload=TransparentPushButton(FluentIcon.UP.icon(),"100 kb/s")
@@ -103,7 +104,6 @@ class StatusBar(QWidget):
         
         
         self.setLayout(layout)
-        self.setFixedHeight(50)
         self.setStyleSheet("background-color: rgb(255,0,0)")
 
     def __handel_setting_changed(self):
@@ -151,33 +151,15 @@ class Monitor(QWidget):
         self.statusBar = StatusBar()
         main_layout.addWidget(self.statusBar)
 
-        # 创建display和IMU的组合布局
-        display_imu_layout = QGridLayout()
-        display_imu_layout.setSpacing(5)  # 减小控件间距，为400x400的IMU控件留出空间
-        display_imu_layout.setContentsMargins(0, 0, 0, 0)  # 移除边距
+ 
         
         self.display = QLabel("无信号，等待客户端连接...")
         self.display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.display.setSizePolicy(QSizePolicy.Expanding,QSizePolicy.Expanding)
         self.display.setStyleSheet("background-color: rgb(0,0,0);color: rgb(255,255,255);")
         
-        # self.imu = IMUWidget()
-        
-        # 将display放在(0,0)位置，占据大部分空间
-        # 将IMU放在(1,1)位置，即右下角，大小为400x400
-        display_imu_layout.addWidget(self.display, 0, 0, 2, 2)  # 跨越2行2列
-        # display_imu_layout.addWidget(self.imu, 1, 1, 1, 1)      # 放在右下角
-        
-        # 设置IMU控件的对齐方式为右下角
-        # display_imu_layout.setAlignment(self.imu, Qt.AlignRight | Qt.AlignBottom)
-        
-        # 设置display的拉伸因子，让它占据大部分空间
-        # 由于IMU控件较大(400x400)，需要调整拉伸比例
-        display_imu_layout.setRowStretch(0, 3)  # 第一行占据更多空间
-        display_imu_layout.setRowStretch(1, 1)  # 第二行占据较少空间
-        display_imu_layout.setColumnStretch(0, 3)  # 第一列占据更多空间
-        display_imu_layout.setColumnStretch(1, 1)  # 第二列占据较少空间
-        
-        main_layout.addLayout(display_imu_layout)
+   
+        main_layout.addWidget(self.display)
         
         self.waveform = WaveformWidget()
         main_layout.addWidget(self.waveform)
@@ -236,8 +218,9 @@ class Monitor(QWidget):
         try:
             # Increment the frame count
             self.fps += 1
-            # 直接设置图像，VideoDisplayWidget会自动处理缩放
-            self.display.setPixmap(pixmap)
+            self.__frame=pixmap
+            scaled_pixmap = self.__frame.scaled(self.display.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.display.setPixmap(scaled_pixmap)
         
         except Exception as e:
             print(f"Error displaying video: {str(e)}")

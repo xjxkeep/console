@@ -126,7 +126,7 @@ class H264Encoder(QObject):
                     break
                 # 创建 PyAV 视频帧
                 video_frame = av.VideoFrame.from_ndarray(frame, format='bgr24')
-                video_frame.pts = int((1 / fps) * av.time_base)
+                video_frame.pts = int(time.time()*1000)
                 # 编码并写入输出文件
                 for packet in stream.encode(video_frame):
                     output_container.mux(packet)
