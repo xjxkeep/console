@@ -566,8 +566,9 @@ class HighwayQuicClient(QObject):
     def send_video_test_data(self):
         data = self.video_encoder_worker.read_frame()
         if self.loop and self.running:
+            video=Video(raw=data,timestamp=int(time.time()*1000))
             future = asyncio.run_coroutine_threadsafe(
-                self.send_message(writer=self.video_writer, message=Video(raw=data, timestamp=int(time.time()*1000))),
+                self.send_message(writer=self.video_writer, message=video),
                 self.loop
             )
             future.result()  # Wait for completion
@@ -595,6 +596,8 @@ class HighwayQuicClient(QObject):
             while self.running:
                 message = await self.receive_message(reader)
                 video = Video.FromString(message)
+                if video.slice_id == video.slice_count:
+                    video.raw=video.raw+b"\x00\x00\x00\x01\xC0"
                 self.video_decoder_worker.write(video.raw)
                 self.latency_sum+=int(time.time()*1000)-video.timestamp
               
