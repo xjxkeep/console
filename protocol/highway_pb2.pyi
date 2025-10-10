@@ -2,8 +2,7 @@ from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from collections.abc import Iterable as _Iterable, Mapping as _Mapping
-from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
+from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -49,7 +48,7 @@ class Register(_message.Message):
     subscribe_device: Device
     token: str
     read_only: bool
-    def __init__(self, device: _Optional[_Union[Device, _Mapping]] = ..., subscribe_device: _Optional[_Union[Device, _Mapping]] = ..., token: _Optional[str] = ..., read_only: _Optional[bool] = ...) -> None: ...
+    def __init__(self, device: _Optional[_Union[Device, _Mapping]] = ..., subscribe_device: _Optional[_Union[Device, _Mapping]] = ..., token: _Optional[str] = ..., read_only: bool = ...) -> None: ...
 
 class Control(_message.Message):
     __slots__ = ("channels",)
@@ -67,20 +66,42 @@ class Video(_message.Message):
     __slots__ = ("raw", "timestamp", "counter", "nalu_id", "slice_id", "slice_count", "nalu_type", "code_type")
     class NaluType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
-        BSLICE: _ClassVar[Video.NaluType]
-        PSLICE: _ClassVar[Video.NaluType]
-        ISLICE: _ClassVar[Video.NaluType]
-        IDRSLICE: _ClassVar[Video.NaluType]
-        SEI: _ClassVar[Video.NaluType]
-        SPS: _ClassVar[Video.NaluType]
-        PPS: _ClassVar[Video.NaluType]
-    BSLICE: Video.NaluType
-    PSLICE: Video.NaluType
-    ISLICE: Video.NaluType
-    IDRSLICE: Video.NaluType
-    SEI: Video.NaluType
-    SPS: Video.NaluType
-    PPS: Video.NaluType
+        NALU_TYPE_UNSPECIFIED: _ClassVar[Video.NaluType]
+        NALU_TYPE_NON_IDR_SLICE: _ClassVar[Video.NaluType]
+        NALU_TYPE_DATA_PARTITION_A: _ClassVar[Video.NaluType]
+        NALU_TYPE_DATA_PARTITION_B: _ClassVar[Video.NaluType]
+        NALU_TYPE_DATA_PARTITION_C: _ClassVar[Video.NaluType]
+        NALU_TYPE_IDR_SLICE: _ClassVar[Video.NaluType]
+        NALU_TYPE_SEI: _ClassVar[Video.NaluType]
+        NALU_TYPE_SPS: _ClassVar[Video.NaluType]
+        NALU_TYPE_PPS: _ClassVar[Video.NaluType]
+        NALU_TYPE_ACCESS_UNIT_DELIMITER: _ClassVar[Video.NaluType]
+        NALU_TYPE_END_OF_SEQUENCE: _ClassVar[Video.NaluType]
+        NALU_TYPE_END_OF_STREAM: _ClassVar[Video.NaluType]
+        NALU_TYPE_FILLER_DATA: _ClassVar[Video.NaluType]
+        NALU_TYPE_SPS_EXTENSION: _ClassVar[Video.NaluType]
+        NALU_TYPE_PREFIX_NALU: _ClassVar[Video.NaluType]
+        NALU_TYPE_SUBSET_SPS: _ClassVar[Video.NaluType]
+        NALU_TYPE_DEPTH_PARAMETER_SET: _ClassVar[Video.NaluType]
+        NALU_TYPE_DEPTH_VIEW_SLICE: _ClassVar[Video.NaluType]
+    NALU_TYPE_UNSPECIFIED: Video.NaluType
+    NALU_TYPE_NON_IDR_SLICE: Video.NaluType
+    NALU_TYPE_DATA_PARTITION_A: Video.NaluType
+    NALU_TYPE_DATA_PARTITION_B: Video.NaluType
+    NALU_TYPE_DATA_PARTITION_C: Video.NaluType
+    NALU_TYPE_IDR_SLICE: Video.NaluType
+    NALU_TYPE_SEI: Video.NaluType
+    NALU_TYPE_SPS: Video.NaluType
+    NALU_TYPE_PPS: Video.NaluType
+    NALU_TYPE_ACCESS_UNIT_DELIMITER: Video.NaluType
+    NALU_TYPE_END_OF_SEQUENCE: Video.NaluType
+    NALU_TYPE_END_OF_STREAM: Video.NaluType
+    NALU_TYPE_FILLER_DATA: Video.NaluType
+    NALU_TYPE_SPS_EXTENSION: Video.NaluType
+    NALU_TYPE_PREFIX_NALU: Video.NaluType
+    NALU_TYPE_SUBSET_SPS: Video.NaluType
+    NALU_TYPE_DEPTH_PARAMETER_SET: Video.NaluType
+    NALU_TYPE_DEPTH_VIEW_SLICE: Video.NaluType
     class CodeType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         H264: _ClassVar[Video.CodeType]
@@ -121,7 +142,7 @@ class File(_message.Message):
     checksum: int
     block_id: int
     last_block: bool
-    def __init__(self, name: _Optional[str] = ..., offset: _Optional[int] = ..., total_size: _Optional[int] = ..., data: _Optional[bytes] = ..., checksum: _Optional[int] = ..., block_id: _Optional[int] = ..., last_block: _Optional[bool] = ...) -> None: ...
+    def __init__(self, name: _Optional[str] = ..., offset: _Optional[int] = ..., total_size: _Optional[int] = ..., data: _Optional[bytes] = ..., checksum: _Optional[int] = ..., block_id: _Optional[int] = ..., last_block: bool = ...) -> None: ...
 
 class Audio(_message.Message):
     __slots__ = ("raw", "timestamp", "counter")

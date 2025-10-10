@@ -42,6 +42,9 @@ class MainWindow(FluentWindow):
             self.move(self.setting.window_x,self.setting.window_y)
         
 
+        self.debug_monitor=Monitor(self.setting)
+        
+
         self.addSubInterface(self.monitor,FluentIcon.MOVIE, "Monitor")
         self.addSubInterface(self.controller,FluentIcon.GAME, "Controller")
         self.addSubInterface(self.settingView,FluentIcon.SETTING,"Setting")
@@ -82,18 +85,23 @@ class MainWindow(FluentWindow):
         
         
         
+        self.quic_client.video_encoder_worker.frame_collected.connect(self.update_debug_monitor)
+
+        
         self.mqtt_client=MQTTClient(self.setting)
         # controller 发送控制消息
         self.controller.controlMessage.connect(self.quic_client.send_control_message)
         self.monitor.startSignal.connect(self.quic_client.start)
         self.monitor.startSignal.connect(self.mqtt_client.start)
         self.monitor.sendTestVideoSignal.connect(self.quic_client.send_video_test)
+        self.monitor.sendTestVideoSignal.connect(self.debug_monitor.show)
         self.monitor.param_changed.connect(self.__handle_param_changed)
         # debug 发送文件 更新进度
         self.debug.uploader.fileToSend.connect(self.quic_client.send_file)
         self.quic_client.file_send_progress.connect(self.debug.uploader.updateProgress)
 
         self.settingView.hid_response.connect(self._handle_hid_response)
+        
         # self.client.start()
         
     
@@ -103,7 +111,12 @@ class MainWindow(FluentWindow):
         self.quic_client.change_video_format(param.get("video_format","H.264"))
         self.mqtt_client.update_video_setting_sync(param.get("resolution","高清"),param.get("video_format","H.264"),param.get("bABR","关闭"))
         
-        
+    
+    def update_debug_monitor(self):
+        if self.quic_client.video_encoder_worker:
+            pixmap=self.quic_client.video_encoder_worker.read_camera()
+            self.debug_monitor.setPixmap(pixmap)
+    
     def update_monitor(self):
         if self.quic_client.video_decoder_worker:
             pixmap=self.quic_client.video_decoder_worker.get_frame()
@@ -158,6 +171,7 @@ class MainWindow(FluentWindow):
         
         self.controller.close()
         print("controller closed")
+        self.debug_monitor.close()
         # self.api.close()
         
         return super().closeEvent(a0)

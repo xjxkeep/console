@@ -526,6 +526,7 @@ class HighwayQuicClient(QObject):
         self.video_encoder_thread.start()
 
 
+
     def send_control_message(self, values: list):
         # TODO 发送速率小于生产速率会产生堆积 导致延迟
         if self.loop and self.running and self.client:
@@ -566,7 +567,16 @@ class HighwayQuicClient(QObject):
     def send_video_test_data(self):
         data = self.video_encoder_worker.read_frame()
         if self.loop and self.running:
-            video=Video(raw=data,timestamp=int(time.time()*1000))
+            video=Video(raw=data,timestamp=int(time.time()*1000),slice_count=1,slice_id=1)
+            if data.startswith(b"\x00\x00\x00\x01"):
+                video.nalu_type=data[4]&0x1f
+                print("send nal (v1):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
+            elif data.startswith(b"\x00\x00\x01"):
+                video.nalu_type=data[3]&0x1f
+                print("send nal (v2):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
+            else:
+                print("illegal nalu length:",len(data))
+            
             future = asyncio.run_coroutine_threadsafe(
                 self.send_message(writer=self.video_writer, message=video),
                 self.loop
@@ -596,9 +606,10 @@ class HighwayQuicClient(QObject):
             while self.running:
                 message = await self.receive_message(reader)
                 video = Video.FromString(message)
-                if video.slice_id == video.slice_count:
-                    video.raw=video.raw+b"\x00\x00\x00\x01\xC0"
                 self.video_decoder_worker.write(video.raw)
+                if video.slice_id == video.slice_count:
+                    print("send eof nal")
+                    self.video_decoder_worker.write(b"\x00\x00\x00\x01\x09\x00")
                 self.latency_sum+=int(time.time()*1000)-video.timestamp
               
                 VIDEO_PROTOBUF_COUNT.labels(slice_id=video.slice_id,nalu_type=Video.NaluType.Name(video.nalu_type),counter=video.counter).inc()

@@ -187,7 +187,6 @@ class Monitor(QWidget):
         self.timer.setInterval(1000)
         self.timer.timeout.connect(self.update_fps)
         self.timer.start()
-        self.decoder=H264Decoder()
         self.latency=0
         self.statusBar.param_changed.connect(self.param_changed)
     
@@ -225,10 +224,7 @@ class Monitor(QWidget):
         except Exception as e:
             print(f"Error displaying video: {str(e)}")
 
-    def closeEvent(self, a0: QCloseEvent | None) -> None:
-        self.decoder.close()
-        print("decoder closed")
-        return super().closeEvent(a0)
+
 
 if __name__=="__main__":
     import sys
