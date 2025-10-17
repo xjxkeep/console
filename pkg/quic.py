@@ -6,8 +6,8 @@ from pkg.codec import H264Encoder,H264Decoder
 from aioquic.asyncio.client import connect
 from aioquic.asyncio.protocol import QuicConnectionProtocol
 from aioquic.quic.configuration import QuicConfiguration
-from aioquic.quic.events import QuicEvent,ConnectionTerminated
-from PyQt5.QtCore import QObject, QThread,pyqtSignal,pyqtSlot
+from aioquic.quic.events import QuicEvent,ConnectionTerminated,DatagramFrameReceived
+from PyQt5.QtCore import QObject, QThread, Qt,pyqtSignal,pyqtSlot
 from google.protobuf.message import Message
 from protocol.highway_pb2 import Register,Device,Control,Video,File,Audio,DeviceParam
 import time
@@ -17,6 +17,9 @@ from pkg.audio import AudioRecorder,AudioPlayer
 import numpy as np
 from pkg.model import Setting
 from pkg.metric import *
+from pkg.fec import FECCodec
+
+
 def generate_crc8_table():
     crc8_table = [0] * 256
     for i in range(256):
@@ -49,14 +52,25 @@ CRC8_TABLE = generate_crc8_table()
 
 class HighwayClientProtocol(QuicConnectionProtocol,QObject):
     quic_connection_lost = pyqtSignal()
+    datagram_data_received = pyqtSignal(bytes)
     def __init__(self, *args, **kwargs) -> None:
         QuicConnectionProtocol.__init__(self, *args, **kwargs)
         QObject.__init__(self)
-
+        self.codec=FECCodec(block_size=1200,timeout_seconds=5.0,max_buffer_size=1000)
+        self.codec.data_decoded.connect(self.datagram_data_received.emit)
     def quic_event_received(self, event: QuicEvent) -> None:
         if isinstance(event, ConnectionTerminated):
             self.quic_connection_lost.emit()
+        elif isinstance(event, DatagramFrameReceived):
+            print("datagram frame received len",len(event.data))
+            self.codec.add_package(event.data)
         return super().quic_event_received(event)
+    
+    def send_datagram(self,data:bytes):
+        for packet in self.codec.encode(data):
+            self._quic.send_datagram_frame(packet)
+
+
 
 class HighwayQuicClient(QObject):
     # TODO 流写入失败 重试
@@ -95,7 +109,13 @@ class HighwayQuicClient(QObject):
         self.frame_slice_count=0
         self.latency_count=0
         # QUIC configuration
-        self.configuration = QuicConfiguration(alpn_protocols=["HLD"], is_client=True)
+        self.configuration = QuicConfiguration(
+            alpn_protocols=["HLD"], 
+            is_client=True,
+            max_datagram_frame_size=65536,  # 启用 datagram 支持，设置最大大小
+            max_datagram_size=1200,  # 单个 datagram 最大大小
+        )
+
         if self.setting.insecure:
             self.configuration.verify_mode = ssl.CERT_NONE
         self.video_stream_failed.connect(self.reconnect_video_stream)
@@ -113,7 +133,7 @@ class HighwayQuicClient(QObject):
         # 视频编码
         self.video_encoder_thread=QThread()
         self.video_encoder_worker=H264Encoder()
-        self.video_encoder_worker.frame_encoded.connect(self.send_video_test_data)
+        self.video_encoder_worker.frame_encoded.connect(self.send_video_test_datagram)
         self.video_encoder_worker.moveToThread(self.video_encoder_thread)
         self.video_encoder_thread.started.connect(self.video_encoder_worker.frame_encode_task)
         self.video_encoder_thread.finished.connect(self.video_encoder_worker.deleteLater)
@@ -164,7 +184,8 @@ class HighwayQuicClient(QObject):
         if self.client:
             self.create_task(self.establish_control_stream())
 
-    async def send_message(self,writer:asyncio.StreamWriter,message:Message,flush=True):
+
+    def package_message(self,message:Message):
          # 序列化消息
         data = message.SerializeToString()
         
@@ -177,14 +198,15 @@ class HighwayQuicClient(QObject):
             length & 0xFF,
             (length >> 8) & 0xFF
         ])
-        
-        # 发送header和数据
-        writer.write(header + data)
+        return header + data
 
+    async def send_message(self,writer:asyncio.StreamWriter,message:Message,flush=True):
+        data=self.package_message(message)
+        writer.write(data)
         if flush:
             await writer.drain()
-        NETWORK_UPLOAD_BYTES.inc(float(len(header+data)))
-        self.upload_bytes+=len(header+data)
+        NETWORK_UPLOAD_BYTES.inc(float(len(data)))
+        self.upload_bytes+=len(data)
         
     async def receive_message(self,reader:asyncio.StreamReader):
          # 创建4字节的header缓冲区
@@ -347,6 +369,8 @@ class HighwayQuicClient(QObject):
                 ) as client:
                     print("connected quic server")
                     self.client = cast(HighwayClientProtocol, client)
+                    self.client.datagram_data_received.connect(self.__parse_datagram)
+
                     
                     self.client.quic_connection_lost.connect(self.connection_lost)
                     self.connected.emit()
@@ -356,6 +380,7 @@ class HighwayQuicClient(QObject):
                     self.create_task(self.establish_control_stream())
                     self.create_task(self.establish_file_stream())
                     self.create_task(self.establish_imu_stream())
+                    self.create_task(self.establish_datagram_stream())
                     
                     # self.create_task(self.establish_audio_stream())
                     # self.audio_encoder_thread.start()
@@ -503,7 +528,7 @@ class HighwayQuicClient(QObject):
     async def establish_video_stream(self):
         """Establish video stream after connection"""
         self.video_reader, self.video_writer = await self.client.create_stream(False)
-        
+
         # Register video stream
         register_msg = Register(
             device=Device(
@@ -522,8 +547,42 @@ class HighwayQuicClient(QObject):
   
         self.create_task(self.__read_video_stream(reader=self.video_reader))
     
-    def send_video_test(self):
+    
+    async def establish_datagram_stream(self):
+        self.datagram_reader,self.datagram_writer=await self.client.create_stream(False)
+        register_msg = Register(
+            device=Device(
+                id=int(self.setting.device_id),
+                message_type=Device.MessageType.DATAGRAM
+            ),
+            subscribe_device=Device(
+                id=int(self.setting.source_device_id),
+                message_type=Device.MessageType.DATAGRAM
+            )
+        )
+        print("send datagram register message ",register_msg)
+        await self.send_message(writer=self.datagram_writer,message=register_msg)
+        
+
+        
+
+
+    def start_test_video_stream(self):
+        self.video_encoder_worker.frame_encoded.connect(self.send_video_test_stream_data)
+        self.video_encoder_worker.moveToThread(self.video_encoder_thread)
+        self.video_encoder_thread.started.connect(self.video_encoder_worker.frame_encode_task)
+        self.video_encoder_thread.finished.connect(self.video_encoder_worker.deleteLater)
         self.video_encoder_thread.start()
+    
+
+    def start_test_video_datagram(self):
+        print("start_test_video_datagram")
+        self.video_encoder_worker.frame_encoded.connect(self.send_video_test_datagram)
+        self.video_encoder_worker.moveToThread(self.video_encoder_thread)
+        self.video_encoder_thread.started.connect(self.video_encoder_worker.frame_encode_task)
+        self.video_encoder_thread.finished.connect(self.video_encoder_worker.deleteLater)
+        self.video_encoder_thread.start()
+
 
 
 
@@ -564,7 +623,11 @@ class HighwayQuicClient(QObject):
         finally:
             print("__send_control_message quit")
     
-    def send_video_test_data(self):
+    
+
+    def send_video_test_stream_data(self):
+        
+        print("rsend_video_test_stream_data:read frame")
         data = self.video_encoder_worker.read_frame()
         if self.loop and self.running:
             video=Video(raw=data,timestamp=int(time.time()*1000),slice_count=1,slice_id=1)
@@ -583,14 +646,24 @@ class HighwayQuicClient(QObject):
             )
             future.result()  # Wait for completion
    
-    async def send_test(self,writer:asyncio.StreamWriter):
-        with open(r"demo.h264","rb") as f:
-            while self.running:
-                data=f.read(5000)
-                if data:
-                    await self.send_message(writer=writer,message=Video(raw=data,timestamp=int(time.time()*1000)))
-                else:break
-                await asyncio.sleep(0.02)
+
+    def send_video_test_datagram(self):
+        data = self.video_encoder_worker.read_frame()
+        if self.loop and self.running:
+            video=Video(raw=data,timestamp=int(time.time()*1000),slice_count=1,slice_id=1)
+            if data.startswith(b"\x00\x00\x00\x01"):
+                video.nalu_type=data[4]&0x1f
+                print("send nal (v1):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
+            elif data.startswith(b"\x00\x00\x01"):
+                video.nalu_type=data[3]&0x1f
+                print("send nal (v2):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
+            else:
+                print("illegal nalu length:",len(data))
+            data=self.package_message(video)
+            self.client.send_datagram(data)
+            
+            
+   
     
     async def __metric_collect(self):
         while self.running:
@@ -599,22 +672,40 @@ class HighwayQuicClient(QObject):
                 self.latency.emit(self.latency_sum//self.latency_count)
                 self.latency_sum=0
                 self.latency_count=0
-            
+    
+    
+    
+    
+    def __parse_datagram(self,data:bytes):
+        print("parse datagram")
+        header=data[:4]
+        length = (header[2]&0xff | (header[3]&0xff)<<8)
+        data=data[4:4+length]
+        self.__parse_video_data(data)
+        
+        
+    def __parse_video_data(self,data:bytes):
+        
+        
+        video = Video.FromString(data)
+    
+        self.video_decoder_worker.write(video.raw)
+        if video.slice_id == video.slice_count:
+            print("send eof nal")
+            self.video_decoder_worker.write(b"\x00\x00\x00\x01\x09\x00")
+        self.latency_sum+=int(time.time()*1000)-video.timestamp
+        
+        VIDEO_PROTOBUF_COUNT.labels(slice_id=video.slice_id,nalu_type=Video.NaluType.Name(video.nalu_type),counter=video.counter).inc()
+        PROTOBUF_LATENCY.labels(type="video").observe(int(time.time()*1000)-video.timestamp)
+        self.latency_count+=1
+        
+    
     async def __read_video_stream(self,reader:asyncio.StreamReader):
         """Background task to read incoming messages"""
         try:
             while self.running:
                 message = await self.receive_message(reader)
-                video = Video.FromString(message)
-                self.video_decoder_worker.write(video.raw)
-                if video.slice_id == video.slice_count:
-                    print("send eof nal")
-                    self.video_decoder_worker.write(b"\x00\x00\x00\x01\x09\x00")
-                self.latency_sum+=int(time.time()*1000)-video.timestamp
-              
-                VIDEO_PROTOBUF_COUNT.labels(slice_id=video.slice_id,nalu_type=Video.NaluType.Name(video.nalu_type),counter=video.counter).inc()
-                PROTOBUF_LATENCY.labels(type="video").observe(int(time.time()*1000)-video.timestamp)
-                self.latency_count+=1
+                self.__parse_video_data(message)
 
         except asyncio.CancelledError as e:
             print("_read_video_stream ",e)

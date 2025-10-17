@@ -23,6 +23,8 @@ class Device(_message.Message):
         AUDIO: _ClassVar[Device.MessageType]
         DEVICEPARAM: _ClassVar[Device.MessageType]
         CLOCKSYNCHRONIZATIONPARAM: _ClassVar[Device.MessageType]
+        VIDEO_FEEDBACK: _ClassVar[Device.MessageType]
+        DATAGRAM: _ClassVar[Device.MessageType]
     VIDEO: Device.MessageType
     CONTROL: Device.MessageType
     REPORT: Device.MessageType
@@ -30,6 +32,8 @@ class Device(_message.Message):
     AUDIO: Device.MessageType
     DEVICEPARAM: Device.MessageType
     CLOCKSYNCHRONIZATIONPARAM: Device.MessageType
+    VIDEO_FEEDBACK: Device.MessageType
+    DATAGRAM: Device.MessageType
     DEVICE_TYPE_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_TYPE_FIELD_NUMBER: _ClassVar[int]
     ID_FIELD_NUMBER: _ClassVar[int]
@@ -63,7 +67,7 @@ class Report(_message.Message):
     def __init__(self, battery: _Optional[float] = ...) -> None: ...
 
 class Video(_message.Message):
-    __slots__ = ("raw", "timestamp", "counter", "nalu_id", "slice_id", "slice_count", "nalu_type", "code_type")
+    __slots__ = ("raw", "timestamp", "frame_id", "slice_id", "slice_count", "nalu_type", "code_type")
     class NaluType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
         __slots__ = ()
         NALU_TYPE_UNSPECIFIED: _ClassVar[Video.NaluType]
@@ -110,21 +114,27 @@ class Video(_message.Message):
     H265: Video.CodeType
     RAW_FIELD_NUMBER: _ClassVar[int]
     TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
-    COUNTER_FIELD_NUMBER: _ClassVar[int]
-    NALU_ID_FIELD_NUMBER: _ClassVar[int]
+    FRAME_ID_FIELD_NUMBER: _ClassVar[int]
     SLICE_ID_FIELD_NUMBER: _ClassVar[int]
     SLICE_COUNT_FIELD_NUMBER: _ClassVar[int]
     NALU_TYPE_FIELD_NUMBER: _ClassVar[int]
     CODE_TYPE_FIELD_NUMBER: _ClassVar[int]
     raw: bytes
     timestamp: int
-    counter: int
-    nalu_id: int
+    frame_id: int
     slice_id: int
     slice_count: int
     nalu_type: Video.NaluType
     code_type: Video.CodeType
-    def __init__(self, raw: _Optional[bytes] = ..., timestamp: _Optional[int] = ..., counter: _Optional[int] = ..., nalu_id: _Optional[int] = ..., slice_id: _Optional[int] = ..., slice_count: _Optional[int] = ..., nalu_type: _Optional[_Union[Video.NaluType, str]] = ..., code_type: _Optional[_Union[Video.CodeType, str]] = ...) -> None: ...
+    def __init__(self, raw: _Optional[bytes] = ..., timestamp: _Optional[int] = ..., frame_id: _Optional[int] = ..., slice_id: _Optional[int] = ..., slice_count: _Optional[int] = ..., nalu_type: _Optional[_Union[Video.NaluType, str]] = ..., code_type: _Optional[_Union[Video.CodeType, str]] = ...) -> None: ...
+
+class VideoFeedback(_message.Message):
+    __slots__ = ("received_frame_index", "lost_frame_count")
+    RECEIVED_FRAME_INDEX_FIELD_NUMBER: _ClassVar[int]
+    LOST_FRAME_COUNT_FIELD_NUMBER: _ClassVar[int]
+    received_frame_index: int
+    lost_frame_count: int
+    def __init__(self, received_frame_index: _Optional[int] = ..., lost_frame_count: _Optional[int] = ...) -> None: ...
 
 class File(_message.Message):
     __slots__ = ("name", "offset", "total_size", "data", "checksum", "block_id", "last_block")

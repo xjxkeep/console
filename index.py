@@ -93,8 +93,11 @@ class MainWindow(FluentWindow):
         self.controller.controlMessage.connect(self.quic_client.send_control_message)
         self.monitor.startSignal.connect(self.quic_client.start)
         self.monitor.startSignal.connect(self.mqtt_client.start)
-        self.monitor.sendTestVideoSignal.connect(self.quic_client.send_video_test)
+        self.monitor.sendTestVideoSignal.connect(self.quic_client.start_test_video_stream)
         self.monitor.sendTestVideoSignal.connect(self.debug_monitor.show)
+        
+        self.monitor.sendTestDatagramSignal.connect(self.quic_client.start_test_video_datagram)
+        
         self.monitor.param_changed.connect(self.__handle_param_changed)
         # debug 发送文件 更新进度
         self.debug.uploader.fileToSend.connect(self.quic_client.send_file)

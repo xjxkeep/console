@@ -140,7 +140,8 @@ class StatusBar(QWidget):
 # TODO imu 显示会导致无法resize窗口
 class Monitor(QWidget):
     startSignal=pyqtSignal()
-    sendTestVideoSignal=pyqtSignal()
+    sendTestVideoSignal=pyqtSignal()    
+    sendTestDatagramSignal=pyqtSignal()
     param_changed=pyqtSignal(dict)
     def setupUi(self):
         self.setObjectName("Monitor")
@@ -167,10 +168,13 @@ class Monitor(QWidget):
   
         self.startButton = PushButton("连接服务器")
         self.startButton.clicked.connect(self.startSignal.emit)
-        self.sendTestVideoButton = PushButton("发送摄像头视频")
+        self.sendTestVideoButton = PushButton("发送摄像头视频(stream)")
+        self.sendTestDatagramButton = PushButton("发送摄像头视频(datagram)")
         self.sendTestVideoButton.clicked.connect(self.sendTestVideoSignal.emit)
+        self.sendTestDatagramButton.clicked.connect(self.sendTestDatagramSignal.emit)
         main_layout.addWidget(self.startButton)
         main_layout.addWidget(self.sendTestVideoButton)
+        main_layout.addWidget(self.sendTestDatagramButton)
         
         self.setLayout(main_layout)
         
