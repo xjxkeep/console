@@ -168,6 +168,7 @@ class HighwayQuicClient(QObject):
         self.tasks: List[asyncio.Task] = []
         
     
+    # TODO 用map[format]decoder 切换更顺滑
     def change_video_format(self,format):
         if format!=self.video_decoder_worker.format:
             self.video_decoder_worker.frame_decoded.disconnect()
@@ -710,6 +711,7 @@ class HighwayQuicClient(QObject):
         video = Video.FromString(data)
     
         self.video_decoder_worker.write(video.raw)
+        # FIXME 如果传输的数据不是一个完整的NALU的话 会花屏
         if video.slice_id == video.slice_count:
             # print("send eof nal")
             self.video_decoder_worker.write(b"\x00\x00\x00\x01\x09\x00")
