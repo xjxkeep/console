@@ -18,3 +18,4 @@ hidapi
 pyopengl
 pillow
 prometheus_client
+zfec
