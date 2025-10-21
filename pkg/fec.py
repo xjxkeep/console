@@ -1,4 +1,4 @@
-from collections import defaultdict, OrderedDict
+from collections import defaultdict, OrderedDict, deque
 from google.protobuf.message import DecodeError
 from reedsolo import RSCodec
 from queue import Queue
@@ -20,14 +20,15 @@ class Packet:
     - block_size: 2字节，原始块大小
     - M: 1字节，冗余块数
     """
-    HEADER_FORMAT = '!IBBB'  # 大端序: uint32, uint8, uint8, uint8
+    HEADER_FORMAT = '!IBBBH'  # 大端序: uint32, uint8, uint8, uint8,uint16
     HEADER_SIZE = struct.calcsize(HEADER_FORMAT)  # 自动计算大小
-    def __init__(self, data_id, K, block_index, M, payload) -> None:
+    def __init__(self, data_id, K, block_index, M,payload) -> None:
         self.data_id = data_id
         self.K = K
         self.block_index = block_index
         self.M = M
         self.payload = payload
+        self.block_size=len(payload)+self.HEADER_SIZE
         self.pts = int(time.time() * 1000)  # 接收时间戳
         
         self.last_updated = time.time()  # 最后更新时间
@@ -42,14 +43,16 @@ class Packet:
 
     @staticmethod
     def from_raw(raw: bytes):
-        data_id, block_index, K,  M = struct.unpack(
+        data_id, block_index, K,  M,block_size = struct.unpack(
             Packet.HEADER_FORMAT,
             raw[:Packet.HEADER_SIZE]
         )
+        if block_size != len(raw):
+            raise ValueError(f"block size mismatch, expected {block_size}, got {len(raw[Packet.HEADER_SIZE:])}")
         return Packet(data_id, K, block_index,  M, raw[Packet.HEADER_SIZE:])
 
     def raw(self):
-        return struct.pack(self.HEADER_FORMAT, self.data_id,self.block_index, self.K,   self.M) + self.payload
+        return struct.pack(self.HEADER_FORMAT, self.data_id,self.block_index, self.K, self.M, self.block_size) + self.payload
 
   
 
@@ -65,13 +68,11 @@ class FECCodec(QObject):
     - block_size: 2字节，原始块大小
     - M: 1字节，冗余块数
     """
-    HEADER_FORMAT = '!IHHH B'  # 大端序: uint32, uint16, uint16, uint16, uint8
-    HEADER_SIZE = 11  # 4+2+2+2+1 = 11字节
+    HEADER_FORMAT = '!IBBBH'  # 大端序: uint32, uint8, uint8, uint8,uint16
+    HEADER_SIZE = struct.calcsize(HEADER_FORMAT)  # 自动计算大小
     
     # 信号定义
-    data_decoded = pyqtSignal(bytes)  # 数据解码成功
-    data_timeout = pyqtSignal(int)    # 数据包超时（data_id）
-    partial_data = pyqtSignal(int, bytes, float)  # 部分数据恢复（data_id, data, recovery_rate）
+    data_decoded = pyqtSignal()  # 数据解码成功
     
     def __init__(self, block_size=1200, timeout_seconds=5.0, max_buffer_size=1000):
         """
@@ -93,6 +94,8 @@ class FECCodec(QObject):
         self.data_id_counter = 0
         
         self.packet_map=defaultdict(list)
+        
+        self.data_buffer= deque()
      
         
      
@@ -131,7 +134,7 @@ class FECCodec(QObject):
                 packet = Packet(data_id, K, i, M, block)
                 packets.append(packet.raw())
             
-            # print(f"Encoded data_id={data_id}: {len(data)} bytes -> {len(packets)} packets (K={K}, M={M})")
+                # print(f"Encoded data_id={data_id} block_index={i} : {len(data)} bytes -> {len(packets)} packets (K={K}, M={M},blocksize={packet.block_size})")
             return packets
             
         except Exception as e:
@@ -146,21 +149,31 @@ class FECCodec(QObject):
             data: 接收到的数据包（包含头部）
         """
         # 解析数据包
-        packet = Packet.from_raw(data)
+        try:
+            packet = Packet.from_raw(data)
+        except Exception as e:
+            print("add package error",e)
+            return
         
         self.packet_map[packet.data_id].append(packet)
-        if len(self.packet_map[packet.data_id]) >= packet.K:
+        if len(self.packet_map[packet.data_id]) == packet.K:
             packets=self.packet_map[packet.data_id]
             decoder = Decoder(packet.K, packet.K + packet.M)
             blocks=[p.payload for p in packets]
             shard_idx=[p.block_index for p in packets]
             decoded_data = decoder.decode(blocks, shard_idx,0)
-            
-            self.data_decoded.emit(decoded_data)
+            self.data_buffer.append(decoded_data)
+            self.data_decoded.emit()
             del self.packet_map[packet.data_id]
         
        
-                
+    
+    def read_data(self):
+        try:
+            return self.data_buffer.popleft()
+        except Exception as e:
+            print("data buffer is empty",e)
+            return None
   
     
    

@@ -1,13 +1,16 @@
 import asyncio
+from collections import deque
 import logging
 import ssl
 from typing import cast, List
+
+from PyQt5.QtWidgets import QApplication
 from pkg.codec import H264Encoder,H264Decoder
 from aioquic.asyncio.client import connect
 from aioquic.asyncio.protocol import QuicConnectionProtocol
 from aioquic.quic.configuration import QuicConfiguration
 from aioquic.quic.events import QuicEvent,ConnectionTerminated,DatagramFrameReceived
-from PyQt5.QtCore import QObject, QThread, Qt,pyqtSignal,pyqtSlot
+from PyQt5.QtCore import QMetaObject, QObject, QThread, Qt,pyqtSignal,pyqtSlot
 from google.protobuf.message import Message
 from protocol.highway_pb2 import Register,Device,Control,Video,File,Audio,DeviceParam
 import time
@@ -51,11 +54,11 @@ CRC8_TABLE = generate_crc8_table()
 
 class HighwayClientProtocol(QuicConnectionProtocol,QObject):
     quic_connection_lost = pyqtSignal()
-    datagram_data_received = pyqtSignal(bytes)
+    datagram_data_received = pyqtSignal()
     def __init__(self, *args, **kwargs) -> None:
         QuicConnectionProtocol.__init__(self, *args, **kwargs)
         QObject.__init__(self)
-        self.codec=FECCodec(block_size=1024,timeout_seconds=5.0,max_buffer_size=1000)
+        self.codec=FECCodec(block_size=512,timeout_seconds=5.0,max_buffer_size=1000)
         self.codec.data_decoded.connect(self.datagram_data_received.emit)   
     def quic_event_received(self, event: QuicEvent) -> None:
         if isinstance(event, ConnectionTerminated):
@@ -68,12 +71,12 @@ class HighwayClientProtocol(QuicConnectionProtocol,QObject):
     def send_datagram(self,data:bytes):
         for packet in self.codec.encode(data):
             self._quic.send_datagram_frame(packet)
-        # 将 transmit 也放到事件循环中执行
-        
-        # 
-        # print("pending datagram",len(self._quic._datagrams_pending))
-        self._loop.call_soon(self.transmit)
+            self.transmit()
 
+    def receive_datagram(self):
+        if len(self.codec.data_buffer)>0:
+            data=self.codec.data_buffer.popleft()
+            return data
 
 
 class HighwayQuicClient(QObject):
@@ -108,6 +111,7 @@ class HighwayQuicClient(QObject):
         
         
         self.send_frame_count=0
+        
 
         
         self.control_stream_queue=Queue()
@@ -138,9 +142,10 @@ class HighwayQuicClient(QObject):
         self.video_decoder_thread.finished.connect(self.video_decoder_worker.deleteLater)
         
         # 视频编码
+        self.video_datagram=False
         self.video_encoder_thread=QThread()
         self.video_encoder_worker=H264Encoder()
-        self.video_encoder_worker.frame_encoded.connect(self.send_video_test_datagram)
+        self.video_encoder_worker.frame_encoded.connect(self.send_video)
         self.video_encoder_worker.moveToThread(self.video_encoder_thread)
         self.video_encoder_thread.started.connect(self.video_encoder_worker.frame_encode_task)
         self.video_encoder_thread.finished.connect(self.video_encoder_worker.deleteLater)
@@ -576,23 +581,15 @@ class HighwayQuicClient(QObject):
         await self.send_message(writer=self.datagram_writer,message=register_msg)
         
 
-        
-
-
     def start_test_video_stream(self):
-        self.video_encoder_worker.frame_encoded.connect(self.send_video_test_stream_data)
-        self.video_encoder_worker.moveToThread(self.video_encoder_thread)
-        self.video_encoder_thread.started.connect(self.video_encoder_worker.frame_encode_task)
-        self.video_encoder_thread.finished.connect(self.video_encoder_worker.deleteLater)
+        print("start send video with stream")
+        self.video_datagram=False
         self.video_encoder_thread.start()
     
 
     def start_test_video_datagram(self):
-        print("start_test_video_datagram")
-        self.video_encoder_worker.frame_encoded.connect(self.send_video_test_datagram)
-        self.video_encoder_worker.moveToThread(self.video_encoder_thread)
-        self.video_encoder_thread.started.connect(self.video_encoder_worker.frame_encode_task)
-        self.video_encoder_thread.finished.connect(self.video_encoder_worker.deleteLater)
+        print("start send video with datagram")
+        self.video_datagram=True
         self.video_encoder_thread.start()
 
 
@@ -636,6 +633,12 @@ class HighwayQuicClient(QObject):
             print("__send_control_message quit")
     
     
+    
+    def send_video(self):
+        if self.video_datagram:
+            self.send_video_test_datagram()
+        else:
+            self.send_video_test_stream_data()
 
     def send_video_test_stream_data(self):
         
@@ -674,7 +677,7 @@ class HighwayQuicClient(QObject):
                 print("illegal nalu length:",len(data))
             data=self.package_message(video)
             # self.loop.call_soon_threadsafe(self.client.send_datagram, data)
-            print("send datagram frame id ",video.frame_id)
+            print("send datagram frame id ",video.frame_id," size ",len(data))
             self.client.send_datagram(data)
             
             
@@ -691,7 +694,10 @@ class HighwayQuicClient(QObject):
     
     
     
-    def __parse_datagram(self,data:bytes):
+    def __parse_datagram(self):
+        data=self.client.receive_datagram()
+        if data is None:
+            return
         header=data[:4]
         length = (header[2]&0xff | (header[3]&0xff)<<8)
         data=data[4:4+length]
