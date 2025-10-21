@@ -57,11 +57,19 @@ class H264Decoder(QObject):
             return
         print("start decode video with format",self.transform_map[self.format])
 
-        self.container = av.open(self.stream,format=self.transform_map[self.format],buffer_size=1024*1024*10)
+        # 优化解码器参数：减少缓冲区大小，启用低延迟模式
+        options = {
+            'buffer_size': str(1024*512),  # 减少缓冲区大小，转换为字符串
+            'flags': 'low_delay',          # 启用低延迟标志
+            'flags2': 'fast',              # 启用快速解码
+            'threads': '1',                # 单线程解码，减少线程切换开销
+            'thread_type': 'slice'         # 使用slice线程类型
+        }
+        self.container = av.open(self.stream, format=self.transform_map[self.format], options=options)
         try:
             while self.running:
                 for frame in self.container.decode(video=0):
-                    print("decode frame",self.frame_count,"time:",time.time())
+                    # print("decode frame",self.frame_count,"time:",time.time())
                     self.frame_count+=1
                     DECODE_FRAME_COUNT.inc()
                     image=frame.to_ndarray(format='rgb24')
@@ -125,22 +133,37 @@ class H264Encoder(QObject):
                 print("无法打开摄像头")
                 return
 
+            # 优化摄像头参数以提高性能
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)      # 减少缓冲区，提高实时性
+            
             # 获取视频属性
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             fps = int(cap.get(cv2.CAP_PROP_FPS))
             if fps == 0:
-                fps = 30
+                fps = 10  # 默认10fps而不是60fps
             print("width:",width,"height:",height,"fps:",fps)
 
 
-            # 创建输出容器
-            output_container = av.open(self, 'w',format='h264')
+            # 创建输出容器 - 优化编码器参数
+            output_container = av.open(self, 'w', format='h264')
             stream = output_container.add_stream('h264', rate=fps)
             stream.width = width
             stream.height = height
             stream.pix_fmt = 'yuv420p'
-            stream.codec_context.gop_size=30
+            
+            # 优化编码器参数以提高性能
+            stream.codec_context.gop_size = 10  # 减少GOP大小，提高实时性
+            stream.codec_context.bit_rate = 1000000  # 设置合适的码率
+            stream.codec_context.max_b_frames = 0  # 禁用B帧，减少延迟
+            stream.codec_context.profile = 'baseline'  # 使用baseline profile，兼容性更好
+            
+            # 使用PyAV支持的选项设置
+            stream.codec_context.options = {
+                'preset': 'ultrafast',
+                'tune': 'zerolatency',
+                'crf': '23'
+            }
 
             
             while self.running:

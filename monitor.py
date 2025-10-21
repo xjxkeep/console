@@ -142,6 +142,7 @@ class Monitor(QWidget):
     startSignal=pyqtSignal()
     sendTestVideoSignal=pyqtSignal()    
     sendTestDatagramSignal=pyqtSignal()
+    sendTestCodecSignal=pyqtSignal()
     param_changed=pyqtSignal(dict)
     def setupUi(self):
         self.setObjectName("Monitor")
@@ -170,12 +171,14 @@ class Monitor(QWidget):
         self.startButton.clicked.connect(self.startSignal.emit)
         self.sendTestVideoButton = PushButton("发送摄像头视频(stream)")
         self.sendTestDatagramButton = PushButton("发送摄像头视频(datagram)")
+        self.sendTestCodecButton = PushButton("测试摄像头视频编解码(codec)")
         self.sendTestVideoButton.clicked.connect(self.sendTestVideoSignal.emit)
         self.sendTestDatagramButton.clicked.connect(self.sendTestDatagramSignal.emit)
+        self.sendTestCodecButton.clicked.connect(self.sendTestCodecSignal.emit)
         main_layout.addWidget(self.startButton)
         main_layout.addWidget(self.sendTestVideoButton)
         main_layout.addWidget(self.sendTestDatagramButton)
-        
+        main_layout.addWidget(self.sendTestCodecButton)
         self.setLayout(main_layout)
         
         self.__frame = None

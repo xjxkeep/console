@@ -1,10 +1,8 @@
 from collections import defaultdict, OrderedDict, deque
 from google.protobuf.message import DecodeError
-from reedsolo import RSCodec
 from queue import Queue
 import struct
 import time
-import threading
 import logging
 from zfec.easyfec import Encoder, Decoder
 from PyQt5.QtCore import QObject, pyqtSignal, QTimer
