@@ -45,7 +45,6 @@ def calculate_crc_fast(data: int) -> int:
     return crc
 
 
-logger = logging.getLogger("quic")
 # 生成全局查找表
 CRC8_TABLE = generate_crc8_table()
 
@@ -56,19 +55,24 @@ class HighwayClientProtocol(QuicConnectionProtocol,QObject):
     def __init__(self, *args, **kwargs) -> None:
         QuicConnectionProtocol.__init__(self, *args, **kwargs)
         QObject.__init__(self)
-        self.codec=FECCodec(block_size=1200,timeout_seconds=5.0,max_buffer_size=1000)
-        self.codec.data_decoded.connect(self.datagram_data_received.emit)
+        self.codec=FECCodec(block_size=1024,timeout_seconds=5.0,max_buffer_size=1000)
+        self.codec.data_decoded.connect(self.datagram_data_received.emit)   
     def quic_event_received(self, event: QuicEvent) -> None:
         if isinstance(event, ConnectionTerminated):
             self.quic_connection_lost.emit()
         elif isinstance(event, DatagramFrameReceived):
-            print("datagram frame received len",len(event.data))
+            # print("datagram frame received len",len(event.data))
             self.codec.add_package(event.data)
         return super().quic_event_received(event)
     
     def send_datagram(self,data:bytes):
         for packet in self.codec.encode(data):
             self._quic.send_datagram_frame(packet)
+        # 将 transmit 也放到事件循环中执行
+        
+        # 
+        # print("pending datagram",len(self._quic._datagrams_pending))
+        self._loop.call_soon(self.transmit)
 
 
 
@@ -102,6 +106,9 @@ class HighwayQuicClient(QObject):
         self.download_bytes = 0
         self.main_thread=QThread()
         
+        
+        self.send_frame_count=0
+
         
         self.control_stream_queue=Queue()
         self.latency_sum=0
@@ -276,30 +283,35 @@ class HighwayQuicClient(QObject):
             self.client.close()
             asyncio.run_coroutine_threadsafe(self.client.wait_closed(),self.loop).result()
             print("client closed")
-        self.video_encoder_worker.frame_encoded.disconnect()
-        self.video_encoder_worker.close()
+        
+        print("start closing video_encoder_thread")
         if self.video_encoder_thread.isRunning():
             self.video_encoder_thread.quit()
+            self.video_encoder_worker.close()
+            self.video_encoder_worker.frame_encoded.disconnect()
             self.video_encoder_thread.wait()
         print("video encoder closed")
 
 
-        self.video_decoder_worker.frame_decoded.disconnect()
-        self.video_decoder_worker.close()
+        
         if self.video_decoder_thread.isRunning():
             self.video_decoder_thread.quit()
+            self.video_decoder_worker.frame_decoded.disconnect()
+            self.video_decoder_worker.close()
             self.video_decoder_thread.wait()
         print("video decoder closed")
 
-        self.audio_encoder_worker.close()
+        
         if self.audio_encoder_thread.isRunning():
             self.audio_encoder_thread.quit()
+            self.audio_encoder_worker.close()
             self.audio_encoder_thread.wait()
         print("audio encoder closed")
        
-        self.audio_player_worker.close()
+        
         if self.audio_player_thread.isRunning():
             self.audio_player_thread.quit()
+            self.audio_player_worker.close()
             self.audio_player_thread.wait()
         print("audio player closed")
         
@@ -506,7 +518,7 @@ class HighwayQuicClient(QObject):
     async def __send_audio_stream(self,writer:asyncio.StreamWriter):
         print("__send_audio_stream task started")
         # 等待一下，确保establish函数完全完成
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.1)    
         print("__send_audio_stream starting to send data")
         try:
             while self.running:
@@ -650,16 +662,19 @@ class HighwayQuicClient(QObject):
     def send_video_test_datagram(self):
         data = self.video_encoder_worker.read_frame()
         if self.loop and self.running:
-            video=Video(raw=data,timestamp=int(time.time()*1000),slice_count=1,slice_id=1)
+            self.send_frame_count+=1
+            video=Video(raw=data,timestamp=int(time.time()*1000),slice_count=1,slice_id=1,frame_id=self.send_frame_count)
             if data.startswith(b"\x00\x00\x00\x01"):
                 video.nalu_type=data[4]&0x1f
-                print("send nal (v1):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
+                # print("send nal (v1):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
             elif data.startswith(b"\x00\x00\x01"):
                 video.nalu_type=data[3]&0x1f
-                print("send nal (v2):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
+                # print("send nal (v2):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
             else:
                 print("illegal nalu length:",len(data))
             data=self.package_message(video)
+            # self.loop.call_soon_threadsafe(self.client.send_datagram, data)
+            print("send datagram frame id ",video.frame_id)
             self.client.send_datagram(data)
             
             
@@ -677,7 +692,6 @@ class HighwayQuicClient(QObject):
     
     
     def __parse_datagram(self,data:bytes):
-        print("parse datagram")
         header=data[:4]
         length = (header[2]&0xff | (header[3]&0xff)<<8)
         data=data[4:4+length]
@@ -691,11 +705,10 @@ class HighwayQuicClient(QObject):
     
         self.video_decoder_worker.write(video.raw)
         if video.slice_id == video.slice_count:
-            print("send eof nal")
+            # print("send eof nal")
             self.video_decoder_worker.write(b"\x00\x00\x00\x01\x09\x00")
         self.latency_sum+=int(time.time()*1000)-video.timestamp
-        
-        VIDEO_PROTOBUF_COUNT.labels(slice_id=video.slice_id,nalu_type=Video.NaluType.Name(video.nalu_type),counter=video.counter).inc()
+        print("parse datagram frame id ",video.frame_id," latency ",int(time.time()*1000)-video.timestamp,"size",len(video.raw))
         PROTOBUF_LATENCY.labels(type="video").observe(int(time.time()*1000)-video.timestamp)
         self.latency_count+=1
         

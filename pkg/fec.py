@@ -20,20 +20,20 @@ class Packet:
     - block_size: 2字节，原始块大小
     - M: 1字节，冗余块数
     """
-    HEADER_FORMAT = '!IHHH B'  # 大端序: uint32, uint16, uint16, uint16, uint8
-    HEADER_SIZE = 11  # 4+2+2+2+1 = 11字节
-    def __init__(self, data_id, K, block_index, block_size, M, payload) -> None:
+    HEADER_FORMAT = '!IBBB'  # 大端序: uint32, uint8, uint8, uint8
+    HEADER_SIZE = struct.calcsize(HEADER_FORMAT)  # 自动计算大小
+    def __init__(self, data_id, K, block_index, M, payload) -> None:
         self.data_id = data_id
         self.K = K
         self.block_index = block_index
-        self.block_size = block_size
         self.M = M
         self.payload = payload
         self.pts = int(time.time() * 1000)  # 接收时间戳
+        
         self.last_updated = time.time()  # 最后更新时间
         
     def __str__(self):
-        return f"Packet(data_id={self.data_id}, K={self.K}, block_index={self.block_index}, block_size={self.block_size}, M={self.M}, payload_len={len(self.payload)})"
+        return f"Packet(data_id={self.data_id}, K={self.K}, block_index={self.block_index},  M={self.M}, payload_len={len(self.payload)})"
     
     def is_expired(self, timeout_seconds):
         """检查数据包是否已过期"""
@@ -42,14 +42,14 @@ class Packet:
 
     @staticmethod
     def from_raw(raw: bytes):
-        data_id, K, block_index, block_size, M = struct.unpack(
+        data_id, block_index, K,  M = struct.unpack(
             Packet.HEADER_FORMAT,
             raw[:Packet.HEADER_SIZE]
         )
-        return Packet(data_id, K, block_index, block_size, M, raw[Packet.HEADER_SIZE:])
+        return Packet(data_id, K, block_index,  M, raw[Packet.HEADER_SIZE:])
 
     def raw(self):
-        return struct.pack(self.HEADER_FORMAT, self.data_id, self.K, self.block_index, self.block_size, self.M) + self.payload
+        return struct.pack(self.HEADER_FORMAT, self.data_id,self.block_index, self.K,   self.M) + self.payload
 
   
 
@@ -128,10 +128,10 @@ class FECCodec(QObject):
             packets = []
             for i, block in enumerate(encoded_data):
                 # 封装头部
-                packet = Packet(data_id, K, i, self.block_size, M, block)
+                packet = Packet(data_id, K, i, M, block)
                 packets.append(packet.raw())
             
-            print(f"Encoded data_id={data_id}: {len(data)} bytes -> {len(packets)} packets (K={K}, M={M})")
+            # print(f"Encoded data_id={data_id}: {len(data)} bytes -> {len(packets)} packets (K={K}, M={M})")
             return packets
             
         except Exception as e:
@@ -147,14 +147,15 @@ class FECCodec(QObject):
         """
         # 解析数据包
         packet = Packet.from_raw(data)
-        print("receive packet ",packet)
         
         self.packet_map[packet.data_id].append(packet)
         if len(self.packet_map[packet.data_id]) >= packet.K:
             packets=self.packet_map[packet.data_id]
-            shard_idx=map(lambda x: x.block_index, packets)
             decoder = Decoder(packet.K, packet.K + packet.M)
-            decoded_data = decoder.decode(packets, shard_idx)
+            blocks=[p.payload for p in packets]
+            shard_idx=[p.block_index for p in packets]
+            decoded_data = decoder.decode(blocks, shard_idx,0)
+            
             self.data_decoded.emit(decoded_data)
             del self.packet_map[packet.data_id]
         

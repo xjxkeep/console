@@ -97,6 +97,7 @@ class MainWindow(FluentWindow):
         self.monitor.sendTestVideoSignal.connect(self.debug_monitor.show)
         
         self.monitor.sendTestDatagramSignal.connect(self.quic_client.start_test_video_datagram)
+        self.monitor.sendTestDatagramSignal.connect(self.debug_monitor.show)
         
         self.monitor.param_changed.connect(self.__handle_param_changed)
         # debug 发送文件 更新进度

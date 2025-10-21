@@ -51,10 +51,12 @@ class H264Decoder(QObject):
         DECODER_FIFO_SIZE.dec()
         return self.frames.get()
     
-    @pyqtSlot()
+
     def frame_decode_task(self):
+        if not self.running:
+            return
         print("start decode video with format",self.transform_map[self.format])
-        self.running=True
+
         self.container = av.open(self.stream,format=self.transform_map[self.format],buffer_size=1024*1024*10)
         try:
             while self.running:
@@ -88,7 +90,6 @@ class H264Encoder(QObject):
     def __init__(self):
         super().__init__()
         self.buffer=BufferStream()
-        # self.buffer.nalu_ready.connect(self.frame_encoded.emit)
         self.running = True
         self.frame_count=0
         self.camera_buffer=Queue()
@@ -115,10 +116,10 @@ class H264Encoder(QObject):
 
     @pyqtSlot()
     def frame_encode_task(self):
-        self.running = True
-
-        while self.running:
-            print("start encode")
+        if not self.running:
+            return
+        print("start encode")
+        try:
             cap = cv2.VideoCapture(0)
             if not cap.isOpened():
                 print("无法打开摄像头")
@@ -132,6 +133,7 @@ class H264Encoder(QObject):
                 fps = 30
             print("width:",width,"height:",height,"fps:",fps)
 
+
             # 创建输出容器
             output_container = av.open(self, 'w',format='h264')
             stream = output_container.add_stream('h264', rate=fps)
@@ -139,11 +141,11 @@ class H264Encoder(QObject):
             stream.height = height
             stream.pix_fmt = 'yuv420p'
             stream.codec_context.gop_size=30
-   
+
             
             while self.running:
-                if self.frame_count>50:
-                    time.sleep(1)
+                # if self.frame_count>0:
+                #     time.sleep(1)
                 self.frame_count+=1
                 ret, frame = cap.read()
                 if not ret:
@@ -167,11 +169,16 @@ class H264Encoder(QObject):
                 # 编码并写入输出文件
                 for packet in stream.encode(video_frame):
                     output_container.mux(packet)
-                print("encode frame",self.frame_count,"time:",time.time())
+                # print("encode frame",self.frame_count,"time:",time.time())
                 
                 
-            output_container.close()
-            cap.release()
+            
+        except Exception as e:
+            print("video encode error",e)
+            pass
+        output_container.close()
+        cap.release()
+        print("video encode thread exit")
 
 
 
