@@ -281,7 +281,7 @@ class HighwayQuicClient(QObject):
                 future.result(timeout=2)  # 2秒超时
                 logging.info("client closed")
             except Exception as e:
-                logging.info(f"关闭客户端时出错: {e}")
+                logging.error(f"关闭客户端时出错: {e}")
                 # 强制关闭
                 if hasattr(self.client, '_quic'):
                     self.client._quic.close()
@@ -367,7 +367,7 @@ class HighwayQuicClient(QObject):
                 if pending:
                     self.loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
             except Exception as e:
-                logging.info(f"清理任务时出错: {e}")
+                logging.error(f"清理任务时出错: {e}")
             finally:
                 self.loop.close()
                 logging.info("事件循环已关闭")
@@ -432,7 +432,7 @@ class HighwayQuicClient(QObject):
                     
                         
             except Exception as e:
-                logging.info(f"connect error: {e}")
+                logging.error(f"connect error: {e}")
                 if self.client:
                     self.client.close()
                     await self.client.wait_closed()
@@ -471,7 +471,7 @@ class HighwayQuicClient(QObject):
                 # 超时是正常的，继续循环检查running状态
                 continue
             except Exception as e:
-                logging.info(f"读取设备参数流错误: {e}")
+                logging.error(f"读取设备参数流错误: {e}")
                 break
 
     async def establish_file_stream(self):
@@ -545,14 +545,14 @@ class HighwayQuicClient(QObject):
                     # 超时是正常的，继续循环检查running状态
                     continue
                 except Exception as e:
-                    logging.info(f"读取音频流错误: {e}")
+                    logging.error(f"读取音频流错误: {e}")
                     break
                 if audio.raw:
                     self.audio_player_worker.write(audio.raw)
         except asyncio.CancelledError:
-            logging.info("__read_audio_stream canceled")
+            logging.error("__read_audio_stream canceled")
         except Exception as e:
-            logging.info(f"__read_audio_stream error: {e}")
+            logging.error(f"__read_audio_stream error: {e}")
         finally:
             logging.info("__read_audio_stream quit")
 
@@ -570,9 +570,9 @@ class HighwayQuicClient(QObject):
                 audio=Audio(raw=data)
                 await self.send_message(writer=writer,message=audio,flush=False)
         except asyncio.CancelledError:
-            logging.info("__send_audio_stream canceled")
+            logging.error("__send_audio_stream canceled")
         except Exception as e:
-            logging.info(f"__send_audio_stream error: {e}")
+            logging.error(f"__send_audio_stream error: {e}")
             import traceback
             traceback.logging.info_exc()
         finally:
@@ -671,7 +671,7 @@ class HighwayQuicClient(QObject):
                     # 超时是正常的，继续循环检查running状态
                     continue
                 except Exception as e:
-                    logging.info(f"发送控制消息错误: {e}")
+                    logging.error(f"发送控制消息错误: {e}")
                     break
         except Exception as e:
             self.control_stream_failed.emit(f"Send control message error: {str(e)}")
@@ -701,7 +701,7 @@ class HighwayQuicClient(QObject):
                 video.nalu_type=data[3]&0x1f
                 # logging.info("send nal (v2):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
             else:
-                logging.info(f"illegal nalu length: {len(data)}")
+                logging.debug(f"illegal nalu length: {len(data)}")
             
             future = asyncio.run_coroutine_threadsafe(
                 self.send_message(writer=self.video_writer, message=video),
@@ -722,7 +722,7 @@ class HighwayQuicClient(QObject):
                 video.nalu_type=data[3]&0x1f
                 # logging.info("send nal (v2):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
             else:
-                logging.info(f"illegal nalu length: {len(data)}")
+                logging.debug(f"illegal nalu length: {len(data)}")
             data=self.package_message(video)
             # self.loop.call_soon_threadsafe(self.client.send_datagram, data)
             # logging.info("send datagram frame id ",video.frame_id," size ",len(data))
@@ -785,13 +785,13 @@ class HighwayQuicClient(QObject):
                     # 超时是正常的，继续循环检查running状态
                     continue
                 except Exception as e:
-                    logging.info(f"读取视频流错误: {e}")
+                    logging.error(f"读取视频流错误: {e}")
                     break
 
         except asyncio.CancelledError as e:
-            logging.info(f"_read_video_stream {e}")
+            logging.error(f"_read_video_stream {e}")
         except Exception as e:
-            logging.info(f"read video stream error {e}")
+            logging.error(f"read video stream error {e}")
             self.video_stream_failed.emit(f"Read error: {str(e)}")
 
         finally:

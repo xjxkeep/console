@@ -7,30 +7,40 @@ import time
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 from google.protobuf.message import DecodeError
 from zfec.easyfec import Decoder, Encoder
+from pkg.crc import calculate_crc8
 
+'''
+符号丢包率
+块丢包率
+丢帧率
+传输延迟
 
+'''
 class Packet:
     """
     健壮的 FEC 编解码器
-    头部格式（11字节）：
+    头部格式（8字节）：
     - data_id: 4字节，数据包ID
-    - K: 2字节，原始数据块数
-    - block_index: 2字节，块序号
-    - block_size: 2字节，原始块大小
+    - block_index: 1字节，块序号
+    - K: 1字节，原始数据块数
     - M: 1字节，冗余块数
+    - crc: 1字节，CRC校验码
     """
-    HEADER_FORMAT = '!IBBBH'  # 大端序: uint32, uint8, uint8, uint8,uint16
+    HEADER_FORMAT = '!IBBBB'  # 大端序: uint32(data_id), uint8(block_index), uint8(K), uint8(M), uint8(crc)
     HEADER_SIZE = struct.calcsize(HEADER_FORMAT)  # 自动计算大小
-    def __init__(self, data_id, K, block_index, M,payload) -> None:
+    def __init__(self, data_id, K, block_index, M,payload,crc=None) -> None:
         self.data_id = data_id
         self.K = K
         self.block_index = block_index
         self.M = M
         self.payload = payload
-        self.block_size=len(payload)+self.HEADER_SIZE
         self.pts = int(time.time() * 1000)  # 接收时间戳
-        
+        if crc:
+            self.crc = crc
+        else:
+            self.crc = calculate_crc8(payload)
         self.last_updated = time.time()  # 最后更新时间
+
         
     def __str__(self):
         return f"Packet(data_id={self.data_id}, K={self.K}, block_index={self.block_index},  M={self.M}, payload_len={len(self.payload)})"
@@ -42,34 +52,23 @@ class Packet:
 
     @staticmethod
     def from_raw(raw: bytes):
-        data_id, block_index, K,  M,block_size = struct.unpack(
+        data_id, block_index, K,  M,crc = struct.unpack(
             Packet.HEADER_FORMAT,
             raw[:Packet.HEADER_SIZE]
         )
-        if block_size != len(raw):
-            raise ValueError(f"block size mismatch, expected {block_size}, got {len(raw[Packet.HEADER_SIZE:])}")
-        return Packet(data_id, K, block_index,  M, raw[Packet.HEADER_SIZE:])
+        payload = raw[Packet.HEADER_SIZE:]
+        calculated_crc = calculate_crc8(payload)
+        if crc != calculated_crc:
+            raise ValueError(f"data_id {data_id} block_id {block_index} crc mismatch, expected {crc}, got {calculated_crc}")
+        return Packet(data_id, K, block_index,  M, payload,crc)
 
     def raw(self):
-        return struct.pack(self.HEADER_FORMAT, self.data_id,self.block_index, self.K, self.M, self.block_size) + self.payload
+        return struct.pack(self.HEADER_FORMAT, self.data_id,self.block_index, self.K, self.M, self.crc) + self.payload
 
   
 
 class FECCodec(QObject):
-    
-    
-    """
-    健壮的 FEC 编解码器
-    头部格式（11字节）：
-    - data_id: 4字节，数据包ID
-    - K: 2字节，原始数据块数
-    - block_index: 2字节，块序号
-    - block_size: 2字节，原始块大小
-    - M: 1字节，冗余块数
-    """
-    HEADER_FORMAT = '!IBBBH'  # 大端序: uint32, uint8, uint8, uint8,uint16
-    HEADER_SIZE = struct.calcsize(HEADER_FORMAT)  # 自动计算大小
-    
+     
     # 信号定义
     data_decoded = pyqtSignal()  # 数据解码成功
     
@@ -96,6 +95,16 @@ class FECCodec(QObject):
         
         self.data_buffer= deque()
      
+        self.running=True
+        
+        self.block_count=0
+        self.block_loss_count=0
+        self.block_break_count=0
+        
+        self.frame_count=0
+        self.frame_loss_count=0
+        self.frame_latest_id=0
+        
         
      
 
@@ -128,16 +137,16 @@ class FECCodec(QObject):
             encoded_data = encoder.encode(data)
             
             packets = []
-            for i, block in enumerate(encoded_data):
+            for i, data in enumerate(encoded_data):
                 # 封装头部
-                packet = Packet(data_id, K, i, M, block)
+                packet = Packet(data_id, K, i, M, data)
                 packets.append(packet.raw())
             
-                # logging.info(f"Encoded data_id={data_id} block_index={i} : {len(data)} bytes -> {len(packets)} packets (K={K}, M={M},blocksize={packet.block_size})")
+                logging.debug(f"Encoded data_id={data_id} block_index={i} : {len(data)} bytes -> {len(packets)} packets (K={K}, M={M})")
             return packets
             
         except Exception as e:
-            logging.info(f"编码失败: {e}")
+            logging.error(f"编码失败: {e}")
             raise
     
     def add_package(self, data: bytes):
@@ -149,9 +158,11 @@ class FECCodec(QObject):
         """
         # 解析数据包
         try:
+            self.block_count+=1
             packet = Packet.from_raw(data)
         except Exception as e:
-            logging.info(f"add package error {e}")
+            logging.error(f"add package error {e}")
+            self.block_break_count+=1
             return
         
         self.packet_map[packet.data_id].append(packet)
@@ -161,21 +172,36 @@ class FECCodec(QObject):
             decoder = Decoder(packet.K, packet.K + packet.M)
             blocks=[p.payload for p in packets]
             shard_idx=[p.block_index for p in packets]
+            logging.debug(f"decoding data_id {packet.data_id} block_indexs {shard_idx}")
             decoded_data = decoder.decode(blocks, shard_idx,0)
             self.data_buffer.append(decoded_data)
             self.data_decoded.emit()
-            del self.packet_map[packet.data_id]
+            self.frame_count+=1
+            
+            
+            self.frame_latest_id=packet.data_id
+            # 删除所有小于data_id的map数据
+            keys_to_delete = [k for k in self.packet_map.keys() if k < packet.data_id]
+            for k in keys_to_delete:
+                del self.packet_map[k]
+
         
-       
-    
+    # def collect_metrics(self):
+    #     while self.running:
+            
+            
+            
     def read_data(self):
         try:
             return self.data_buffer.popleft()
         except Exception as e:
-            logging.info(f"data buffer is empty {e}")
+            logging.error(f"data buffer is empty {e}")
             return None
   
-    
+    def close(self):
+        self.running=False
+        self.data_buffer.clear()
+        self.packet_map.clear()
    
     
    

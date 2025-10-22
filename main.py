@@ -14,8 +14,6 @@ splash = SplashScreen()
 splash.show()
 logging.info("loading")
 from index import MainWindow
-from prometheus_client import start_http_server
-start_http_server(8000)
 logging.info("start prometheus http server on port 8000")
 app.processEvents()
 m=MainWindow()
