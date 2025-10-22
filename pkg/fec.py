@@ -43,7 +43,7 @@ class Packet:
 
         
     def __str__(self):
-        return f"Packet(data_id={self.data_id}, K={self.K}, block_index={self.block_index},  M={self.M}, payload_len={len(self.payload)})"
+        return f"Packet(data_id={self.data_id}, block_index={self.block_index}, K={self.K}, M={self.M}, crc={self.crc}, payload_len={len(self.payload)})"
     
     def is_expired(self, timeout_seconds):
         """检查数据包是否已过期"""
@@ -60,8 +60,9 @@ class Packet:
         calculated_crc = calculate_crc8(payload)
         if crc != calculated_crc:
             raise ValueError(f"data_id {data_id} block_id {block_index} crc mismatch, expected {crc}, got {calculated_crc}")
-        return Packet(data_id, K, block_index,  M, payload,crc)
-
+        packet= Packet(data_id, K, block_index,  M, payload,crc)
+        logging.debug(f"receive packet {packet}")
+        return packet
     def raw(self):
         return struct.pack(self.HEADER_FORMAT, self.data_id,self.block_index, self.K, self.M, self.crc) + self.payload
 

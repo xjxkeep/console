@@ -48,7 +48,7 @@ class HighwayClientProtocol(QuicConnectionProtocol,QObject):
             self._connection_lost = True
             self.quic_connection_lost.emit()
         elif isinstance(event, DatagramFrameReceived):
-            logging.debug("datagram frame received len",len(event.data))
+            logging.debug(f"datagram frame received len {len(event.data)}")
             self.codec.add_package(event.data)
         return super().quic_event_received(event)
     

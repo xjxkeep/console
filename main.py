@@ -1,11 +1,24 @@
 import logging
 from loader import SplashScreen
 from PyQt5.QtWidgets import QApplication
+from pkg.log_manager import log_manager
 import sys
-logging.basicConfig(
-    level=logging.INFO,  # 日志级别
-    format="%(asctime)s - %(levelname)s - %(message)s"  # 格式
-)
+
+# 使用日志管理器初始化日志
+log_manager._setup_logging()
+
+# 尝试从设置文件加载日志级别
+try:
+    import json
+    import os
+    if os.path.exists(".setting.json"):
+        with open(".setting.json", "r", encoding='utf-8') as f:
+            settings = json.load(f)
+            if "log_level" in settings:
+                log_manager.set_log_level(settings["log_level"])
+                logging.info(f"已从设置文件加载日志级别: {settings['log_level']}")
+except Exception as e:
+    logging.warning(f"加载日志级别设置失败: {e}")
 
 
 app=QApplication(sys.argv)

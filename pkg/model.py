@@ -66,3 +66,4 @@ class Setting(BaseModel):
     window_height: int = 800
     window_x: int = 0
     window_y: int = 0
+    log_level: str = "DEBUG"  # 日志级别设置
