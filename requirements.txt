@@ -2,6 +2,7 @@ pygame
 aioquic
 PyQt5
 PyQt-Fluent-Widgets
+asyncqt
 protobuf
 uuid
 pyinstaller

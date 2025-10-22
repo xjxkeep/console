@@ -181,7 +181,7 @@ class Debug(ScrollArea):
     
     def saveSetting(self):
         logging.info(f"save {self.getSetting()}")
-        with open("setting.json", "w") as f:
+        with open(".setting.json", "w") as f:
             json.dump(self.getSetting(), f)
 
 

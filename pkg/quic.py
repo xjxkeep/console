@@ -7,7 +7,7 @@ import ssl
 import time
 from typing import List, cast
 
-from PyQt5.QtCore import QMetaObject, QObject, QThread, Qt, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QMetaObject, QObject, QThread, Qt, pyqtSignal, pyqtSlot, QTimer
 from PyQt5.QtWidgets import QApplication
 from aioquic.asyncio.client import connect
 from aioquic.asyncio.protocol import QuicConnectionProtocol
@@ -41,9 +41,11 @@ class HighwayClientProtocol(QuicConnectionProtocol,QObject):
         QuicConnectionProtocol.__init__(self, *args, **kwargs)
         QObject.__init__(self)
         self.codec=FECCodec(block_size=1024,timeout_seconds=5.0,max_buffer_size=1000)
-        self.codec.data_decoded.connect(self.datagram_data_received.emit)   
+        self.codec.data_decoded.connect(self.datagram_data_received.emit)
+        self._connection_lost = False   
     def quic_event_received(self, event: QuicEvent) -> None:
         if isinstance(event, ConnectionTerminated):
+            self._connection_lost = True
             self.quic_connection_lost.emit()
         elif isinstance(event, DatagramFrameReceived):
             logging.debug("datagram frame received len",len(event.data))
@@ -51,15 +53,35 @@ class HighwayClientProtocol(QuicConnectionProtocol,QObject):
         return super().quic_event_received(event)
     
     def send_datagram(self,data:bytes):
-        for packet in self.codec.encode(data):
-            self._quic.send_datagram_frame(packet)
-            
-        self.transmit()
+        try:
+            # 检查连接是否仍然有效
+            if self._connection_lost or self._quic is None:
+                logging.warning("QUIC连接已断开，无法发送数据报")
+                return False
+                
+            for packet in self.codec.encode(data):
+                self._quic.send_datagram_frame(packet)
+                
+            self.transmit()
+            return True
+        except Exception as e:
+            logging.error(f"发送数据报时出错: {e}")
+            self._connection_lost = True
+            # 触发连接丢失信号
+            self.quic_connection_lost.emit()
+            return False
 
     def receive_datagram(self):
         if len(self.codec.data_buffer)>0:
             data=self.codec.data_buffer.popleft()
             return data
+    
+    def connection_lost(self, exc):
+        """重写连接丢失处理方法"""
+        logging.info(f"传输层连接丢失: {exc}")
+        self._connection_lost = True
+        self.quic_connection_lost.emit()
+        return super().connection_lost(exc)
 
 
 
@@ -87,18 +109,14 @@ class HighwayQuicClient(QObject):
         self.client = None
         self.reader = None
         self.writer = None
-        self.loop = None
+        self.loop = None  # 初始化loop属性
         self.running = False
         self.upload_bytes = 0
         self.download_bytes = 0
-        self.main_thread=QThread()
-        
         
         self.send_frame_count=0
         
-
-        
-        self.control_stream_queue=Queue()
+        self.control_stream_queue: Queue = Queue()
         self.latency_sum=0
         self.frame_latency_sum=0
         self.frame_slice_count=0
@@ -250,15 +268,31 @@ class HighwayQuicClient(QObject):
                         break
                         
     def start(self):
-        """Start the client in a new thread"""
+        """Start the client in a separate thread"""
         if self.running:
             return
         self.running = True
+        
+        # 创建新的事件循环
         self.loop = asyncio.new_event_loop()
-        self.moveToThread(self.main_thread)
-        self.main_thread.started.connect(self._run_event_loop)
-        self.main_thread.finished.connect(self.deleteLater)
-        self.main_thread.start()
+        
+        # 在单独线程中运行事件循环
+        self.thread = QThread()
+        self.moveToThread(self.thread)
+        self.thread.started.connect(self._run_async_loop)
+        self.thread.finished.connect(self.deleteLater)
+        self.thread.start()
+    
+    def _run_async_loop(self):
+        """在单独线程中运行异步事件循环"""
+        asyncio.set_event_loop(self.loop)
+        try:
+            self.loop.run_until_complete(self.run())
+        except Exception as e:
+            logging.error(f"异步事件循环错误: {e}")
+            self.connection_error.emit(str(e))
+        finally:
+            self.loop.close()
 
     def close(self):
         """Stop the client and cleanup resources"""
@@ -276,9 +310,8 @@ class HighwayQuicClient(QObject):
         if self.client:
             try:
                 self.client.close()
-                # 使用超时避免无限等待
-                future = asyncio.run_coroutine_threadsafe(self.client.wait_closed(), self.loop)
-                future.result(timeout=2)  # 2秒超时
+                # 使用asyncqt的run_until_complete
+                self.loop.run_until_complete(self.client.wait_closed())
                 logging.info("client closed")
             except Exception as e:
                 logging.error(f"关闭客户端时出错: {e}")
@@ -286,7 +319,7 @@ class HighwayQuicClient(QObject):
                 if hasattr(self.client, '_quic'):
                     self.client._quic.close()
         
-        logging.info("start closing video_encoder_thread")
+        # 关闭视频编码器
         if self.video_encoder_thread.isRunning():
             self.video_encoder_thread.quit()
             self.video_encoder_worker.close()
@@ -294,8 +327,7 @@ class HighwayQuicClient(QObject):
             self.video_encoder_thread.wait()
         logging.info("video encoder closed")
 
-
-        
+        # 关闭视频解码器
         if self.video_decoder_thread.isRunning():
             self.video_decoder_thread.quit()
             self.video_decoder_worker.frame_decoded.disconnect()
@@ -303,39 +335,27 @@ class HighwayQuicClient(QObject):
             self.video_decoder_thread.wait()
         logging.info("video decoder closed")
 
-        
+        # 关闭音频编码器
         if self.audio_encoder_thread.isRunning():
             self.audio_encoder_thread.quit()
             self.audio_encoder_worker.close()
             self.audio_encoder_thread.wait()
         logging.info("audio encoder closed")
        
-        
+        # 关闭音频播放器
         if self.audio_player_thread.isRunning():
             self.audio_player_thread.quit()
             self.audio_player_worker.close()
             self.audio_player_thread.wait()
         logging.info("audio player closed")
         
-        
-        # # Stop the event loop
+        # 停止线程和事件循环
+        if hasattr(self, 'thread') and self.thread.isRunning():
+            self.thread.quit()
+            self.thread.wait()
         if self.loop and self.loop.is_running():
-            self.loop.call_soon_threadsafe(self.loop.stop)
-        logging.info("loop stop")
-        
-        # Wait for the thread to finish with timeout (Windows11 fix)
-        if self.main_thread.isRunning():
-            self.main_thread.quit()
-            # 使用超时避免Windows11上的无限阻塞
-            if not self.main_thread.wait(3000):  # 3秒超时
-                logging.info("警告: 主线程未能在3秒内退出，强制终止")
-                self.main_thread.terminate()
-                self.main_thread.wait(1000)  # 再等待1秒
-        logging.info("main thread quit")
-        
-        
-        
-        
+            self.loop.stop()
+        logging.info("event loop stopped")
 
     async def __update_speed(self):
         while self.running:
@@ -344,39 +364,17 @@ class HighwayQuicClient(QObject):
             self.download_speed.emit(self.download_bytes)
             self.upload_bytes = 0
             self.download_bytes = 0
-            await asyncio.sleep(1)
+            await asyncio.sleep(1.0)
     
-    @pyqtSlot()
-    def _run_event_loop(self):
-        """Run the event loop in a separate thread"""
-        if not self.running:
-            return
-        logging.info("run event loop")
-        asyncio.set_event_loop(self.loop)
-        try:
-            self.loop.run_until_complete(self.run())
-            self.loop.run_forever()
-        except Exception as e:
-            self.connection_error.emit(str(e))
-        finally:
-            # 确保所有任务都被取消
-            try:
-                pending = asyncio.all_tasks(self.loop)
-                for task in pending:
-                    task.cancel()
-                if pending:
-                    self.loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-            except Exception as e:
-                logging.error(f"清理任务时出错: {e}")
-            finally:
-                self.loop.close()
-                logging.info("事件循环已关闭")
 
     def connection_lost(self):
         logging.info("connection lost")
         self.running=False
         self.client=None
         self.connection_error.emit("quic lost")
+        
+        # 清理所有任务
+        self.clear_tasks()
 
     def clear_tasks(self):
         for task in self.tasks:
@@ -422,7 +420,7 @@ class HighwayQuicClient(QObject):
                         try:
                             # Check if client is still connected with shorter timeout
                             await asyncio.wait_for(client.ping(), timeout=0.5)
-                            await asyncio.sleep(5)
+                            await asyncio.sleep(1.0)
                         except asyncio.TimeoutError:
                             logging.info("Ping timeout, connection may be lost")
                             break
@@ -441,8 +439,19 @@ class HighwayQuicClient(QObject):
                 logging.info("tasks cleared!")
 
 
-    def create_task(self,task):
-        self.tasks.append(self.loop.create_task(task))
+    def create_task(self, task):
+        """创建异步任务"""
+        if self.loop:
+            self.tasks.append(self.loop.create_task(task))
+        else:
+            logging.warning("事件循环未初始化，无法创建任务")
+    
+    def _ensure_loop(self):
+        """确保事件循环已初始化"""
+        if self.loop is None:
+            logging.warning("事件循环未初始化，尝试创建新的事件循环")
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
 
     async def establish_imu_stream(self):
         self.imu_reader,self.imu_writer=await self.client.create_stream(False)
@@ -490,8 +499,10 @@ class HighwayQuicClient(QObject):
         await self.send_message(writer=self.file_writer,message=register_msg)
     
     def send_file(self,filePath):
-        if self.loop and self.running and self.file_writer:
-            self.loop.create_task(self.__send_file(filePath))
+        if self.running and self.file_writer:
+            self._ensure_loop()
+            if self.loop:
+                self.loop.create_task(self.__send_file(filePath))
 
     async def __send_file(self,filePath):
         with open(filePath, "rb") as f:
@@ -574,7 +585,7 @@ class HighwayQuicClient(QObject):
         except Exception as e:
             logging.error(f"__send_audio_stream error: {e}")
             import traceback
-            traceback.logging.info_exc()
+            traceback.print_exc()
         finally:
             logging.info("__send_audio_stream task ended")
     
@@ -636,13 +647,15 @@ class HighwayQuicClient(QObject):
 
     def send_control_message(self, values: list):
         # TODO 发送速率小于生产速率会产生堆积 导致延迟
-        if self.loop and self.running and self.client:
-            # logging.info("send control message:",values)
-            future = asyncio.run_coroutine_threadsafe(
-                self.control_stream_queue.put(Control(channels=values)), 
-                self.loop
-            )
-            future.result()  # 等待操作完成
+        if self.running and self.client:
+            self._ensure_loop()
+            if self.loop:
+                # logging.info("send control message:",values)
+                future = asyncio.run_coroutine_threadsafe(
+                    self.control_stream_queue.put(Control(channels=values)), 
+                    self.loop
+                )
+                future.result()  # 等待操作完成
     
     
     
@@ -689,44 +702,48 @@ class HighwayQuicClient(QObject):
             self.video_test_without_send()
 
     def send_video_test_stream_data(self):
-        
-
         data = self.video_encoder_worker.read_frame()
-        if self.loop and self.running:
-            video=Video(raw=data,timestamp=int(time.time()*1000),slice_count=1,slice_id=1)
-            if data.startswith(b"\x00\x00\x00\x01"):
-                video.nalu_type=data[4]&0x1f
-                # logging.info("send nal (v1):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
-            elif data.startswith(b"\x00\x00\x01"):
-                video.nalu_type=data[3]&0x1f
-                # logging.info("send nal (v2):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
-            else:
-                logging.debug(f"illegal nalu length: {len(data)}")
-            
-            future = asyncio.run_coroutine_threadsafe(
-                self.send_message(writer=self.video_writer, message=video),
-                self.loop
-            )
-            future.result()  # Wait for completion
+        if self.running and self.video_writer:
+            self._ensure_loop()
+            if self.loop:
+                video=Video(raw=data,timestamp=int(time.time()*1000),slice_count=1,slice_id=1)
+                if data.startswith(b"\x00\x00\x00\x01"):
+                    video.nalu_type=data[4]&0x1f
+                    # logging.info("send nal (v1):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
+                elif data.startswith(b"\x00\x00\x01"):
+                    video.nalu_type=data[3]&0x1f
+                    # logging.info("send nal (v2):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
+                else:
+                    logging.debug(f"illegal nalu length: {len(data)}")
+                
+                future = asyncio.run_coroutine_threadsafe(
+                    self.send_message(writer=self.video_writer, message=video),
+                    self.loop
+                )
+                future.result()  # Wait for completion
    
 
     def send_video_test_datagram(self):
         data = self.video_encoder_worker.read_frame()
-        if self.loop and self.running:
-            self.send_frame_count+=1
-            video=Video(raw=data,timestamp=int(time.time()*1000),slice_count=1,slice_id=1,frame_id=self.send_frame_count)
-            if data.startswith(b"\x00\x00\x00\x01"):
-                video.nalu_type=data[4]&0x1f
-                # logging.info("send nal (v1):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
-            elif data.startswith(b"\x00\x00\x01"):
-                video.nalu_type=data[3]&0x1f
-                # logging.info("send nal (v2):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
-            else:
-                logging.debug(f"illegal nalu length: {len(data)}")
-            data=self.package_message(video)
-            # self.loop.call_soon_threadsafe(self.client.send_datagram, data)
-            # logging.info("send datagram frame id ",video.frame_id," size ",len(data))
-            self.client.send_datagram(data)
+        if self.running and self.client:
+            self._ensure_loop()
+            if self.loop:
+                self.send_frame_count+=1
+                video=Video(raw=data,timestamp=int(time.time()*1000),slice_count=1,slice_id=1,frame_id=self.send_frame_count)
+                if data.startswith(b"\x00\x00\x00\x01"):
+                    video.nalu_type=data[4]&0x1f
+                    # logging.info("send nal (v1):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
+                elif data.startswith(b"\x00\x00\x01"):
+                    video.nalu_type=data[3]&0x1f
+                    # logging.info("send nal (v2):",video.nalu_type,Video.NaluType.Name(video.nalu_type))
+                else:
+                    logging.debug(f"illegal nalu length: {len(data)}")
+                data=self.package_message(video)
+                # self.loop.call_soon_threadsafe(self.client.send_datagram, data)
+                # logging.info("send datagram frame id ",video.frame_id," size ",len(data))
+                success = self.client.send_datagram(data)
+                if not success:
+                    logging.warning("发送视频数据报失败，连接可能已断开")
             
     
     def video_test_without_send(self):
@@ -739,7 +756,7 @@ class HighwayQuicClient(QObject):
     
     async def __metric_collect(self):
         while self.running:
-            await asyncio.sleep(1)
+            await asyncio.sleep(1.0)
             if self.latency_count>0:
                 self.latency.emit(self.latency_sum//self.latency_count)
                 self.latency_sum=0

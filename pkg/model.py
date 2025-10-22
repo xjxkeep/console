@@ -51,7 +51,7 @@ class Setting(BaseModel):
     host: str = "stream.api.andless.tech"
     port: int = 30042
     insecure: bool = True
-    source_device_id: int = 0
+    source_device_id: int = 1
     channel_count: int = 10
     device_id: int = 1
     mqtt_port: int = 31883
