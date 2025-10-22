@@ -62,7 +62,7 @@ class HighwayClientProtocol(QuicConnectionProtocol,QObject):
             for packet in self.codec.encode(data):
                 self._quic.send_datagram_frame(packet)
                 
-            self.transmit()
+            self._loop.call_soon_threadsafe(self.transmit)
             return True
         except Exception as e:
             logging.error(f"发送数据报时出错: {e}")
@@ -127,6 +127,7 @@ class HighwayQuicClient(QObject):
             is_client=True,
             max_datagram_frame_size=65536,  # 启用 datagram 支持，设置最大大小
             max_datagram_size=1200,  # 单个 datagram 最大大小
+            idle_timeout=2
         )
 
         if self.setting.insecure:
