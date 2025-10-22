@@ -1,7 +1,15 @@
-from PyQt5.QtWidgets import QGraphicsTextItem, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QWidget, QVBoxLayout
-from PyQt5.QtGui import QPixmap, QPainter
-from PyQt5.QtCore import Qt, pyqtSignal
+import logging
 
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QPainter, QPixmap
+from PyQt5.QtWidgets import (
+    QGraphicsPixmapItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+    QGraphicsView,
+    QVBoxLayout,
+    QWidget,
+)
 class VideoDisplayWidget(QWidget):
     """基于QGraphicsView + QGraphicsPixmapItem的高性能视频显示组件
     保持与QLabel.setPixmap()接口兼容
@@ -60,7 +68,7 @@ class VideoDisplayWidget(QWidget):
                 self.setText("无效图像")
                 
         except Exception as e:
-            print(f"Error setting pixmap: {str(e)}")
+            logging.info(f"Error setting pixmap: {str(e)}")
             self.setText("图像显示错误")
     
     def setText(self, text: str):
@@ -93,7 +101,7 @@ class VideoDisplayWidget(QWidget):
             self.scene.setSceneRect(text_item.boundingRect())
             
         except Exception as e:
-            print(f"Error setting text: {str(e)}")
+            logging.info(f"Error setting text: {str(e)}")
     
     def clearText(self):
         """清除文本显示"""

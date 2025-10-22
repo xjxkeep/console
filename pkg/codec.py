@@ -1,18 +1,19 @@
+from collections import deque
+import copy
+import io
+import logging
+from queue import Queue
+import threading
+import time
+
+from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
+from PyQt5.QtGui import QImage, QPixmap
 import av
 import cv2
-from PyQt5.QtCore import QObject, pyqtSignal,pyqtSlot
 import numpy as np
-import copy
-import threading
-from collections import deque
-import time
-import io
-from queue import Queue
-from PyQt5.QtGui import QImage, QPixmap
 
 from pkg.buffer import BufferStream
 from pkg.metric import *
-
 
 class H264Decoder(QObject):
     frame_decoded = pyqtSignal()
@@ -25,7 +26,7 @@ class H264Decoder(QObject):
             "hevc":"hevc",
         }
         self.stream=BufferStream()
-        self.frames=Queue()
+        self.frames=deque()
         self.format=format
         self.has_data = False
         self.running = True
@@ -37,25 +38,26 @@ class H264Decoder(QObject):
         self.stream.close()
 
     def write(self, data):
-        if len(data)==0:
+        if not data or len(data)==0 :
             return
         # if data.startswith(b"\x00\x00\x00\x01"):
-        #     print("get decoder v1 nal",data[4]&0x1f)
+        #     logging.info("get decoder v1 nal",data[4]&0x1f)
         # elif data.startswith(b"\x00\x00\x01"):
-        #     print("get decoder v2 nal",data[3]&0x1f)
+        #     logging.info("get decoder v2 nal",data[3]&0x1f)
         # else:
-        #     print("get decoder illegal nal",len(data))
+        #     logging.info("get decoder illegal nal",len(data))
         self.stream.write(data)
 
     def get_frame(self):
         DECODER_FIFO_SIZE.dec()
-        return self.frames.get()
+        if len(self.frames)>0:
+            return self.frames.popleft()
     
 
     def frame_decode_task(self):
         if not self.running:
             return
-        print("start decode video with format",self.transform_map[self.format])
+        logging.info(f"start decode video with format {self.transform_map[self.format]}")
 
         # 优化解码器参数：减少缓冲区大小，启用低延迟模式
         options = {
@@ -69,7 +71,7 @@ class H264Decoder(QObject):
         try:
             while self.running:
                 for frame in self.container.decode(video=0):
-                    # print("decode frame",self.frame_count,"time:",time.time())
+                    # logging.info("decode frame",self.frame_count,"time:",time.time())
                     self.frame_count+=1
                     DECODE_FRAME_COUNT.inc()
                     image=frame.to_ndarray(format='rgb24')
@@ -78,19 +80,19 @@ class H264Decoder(QObject):
                     q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
                     # Convert QImage to QPixmap
                     pixmap = QPixmap.fromImage(q_img)
-                    self.frames.put(pixmap)
+                    self.frames.append(pixmap)
                     DECODER_FIFO_SIZE.inc()
                     self.frame_decoded.emit()
                     if not self.running:
-                        print("video decode thread exit")
+                        logging.info("video decode thread exit")
                         return
         except Exception as e:
-            print("video decode error",e)
+            logging.info(f"video decode error {e}")
             pass
         self.stream.close()
         if self.container:
             self.container.close()
-        print("video decode thread exit")
+        logging.info("video decode thread exit")
         
 class H264Encoder(QObject):
     frame_encoded = pyqtSignal()
@@ -126,11 +128,11 @@ class H264Encoder(QObject):
     def frame_encode_task(self):
         if not self.running:
             return
-        print("start encode")
+        logging.info("start encode")
         try:
             cap = cv2.VideoCapture(0)
             if not cap.isOpened():
-                print("无法打开摄像头")
+                logging.info("无法打开摄像头")
                 return
 
             # 优化摄像头参数以提高性能
@@ -142,7 +144,7 @@ class H264Encoder(QObject):
             fps = int(cap.get(cv2.CAP_PROP_FPS))
             if fps == 0:
                 fps = 10  # 默认10fps而不是60fps
-            print("width:",width,"height:",height,"fps:",fps)
+            logging.info(f"width: {width} height: {height} fps: {fps}")
 
 
             # 创建输出容器 - 优化编码器参数
@@ -172,7 +174,7 @@ class H264Encoder(QObject):
                 self.frame_count+=1
                 ret, frame = cap.read()
                 if not ret:
-                    print("无法读取视频帧")
+                    logging.info("无法读取视频帧")
                     break
                 
                 # 将OpenCV帧(frame)转换为QPixmap
@@ -192,16 +194,16 @@ class H264Encoder(QObject):
                 # 编码并写入输出文件
                 for packet in stream.encode(video_frame):
                     output_container.mux(packet)
-                # print("encode frame",self.frame_count,"time:",time.time())
+                # logging.info("encode frame",self.frame_count,"time:",time.time())
                 
                 
             
         except Exception as e:
-            print("video encode error",e)
+            logging.info(f"video encode error {e}")
             pass
         output_container.close()
         cap.release()
-        print("video encode thread exit")
+        logging.info("video encode thread exit")
 
 
 

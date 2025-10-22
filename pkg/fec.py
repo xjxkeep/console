@@ -1,11 +1,12 @@
-from collections import defaultdict, OrderedDict, deque
-from google.protobuf.message import DecodeError
+from collections import OrderedDict, defaultdict, deque
+import logging
 from queue import Queue
 import struct
 import time
-import logging
-from zfec.easyfec import Encoder, Decoder
-from PyQt5.QtCore import QObject, pyqtSignal, QTimer
+
+from PyQt5.QtCore import QObject, QTimer, pyqtSignal
+from google.protobuf.message import DecodeError
+from zfec.easyfec import Decoder, Encoder
 
 
 class Packet:
@@ -132,11 +133,11 @@ class FECCodec(QObject):
                 packet = Packet(data_id, K, i, M, block)
                 packets.append(packet.raw())
             
-                # print(f"Encoded data_id={data_id} block_index={i} : {len(data)} bytes -> {len(packets)} packets (K={K}, M={M},blocksize={packet.block_size})")
+                # logging.info(f"Encoded data_id={data_id} block_index={i} : {len(data)} bytes -> {len(packets)} packets (K={K}, M={M},blocksize={packet.block_size})")
             return packets
             
         except Exception as e:
-            print(f"编码失败: {e}")
+            logging.info(f"编码失败: {e}")
             raise
     
     def add_package(self, data: bytes):
@@ -150,10 +151,11 @@ class FECCodec(QObject):
         try:
             packet = Packet.from_raw(data)
         except Exception as e:
-            print("add package error",e)
+            logging.info(f"add package error {e}")
             return
         
         self.packet_map[packet.data_id].append(packet)
+        # TODO 如果没有达到K个包 尽量还原数据给解码器  添加超时机制 避免内存泄漏
         if len(self.packet_map[packet.data_id]) == packet.K:
             packets=self.packet_map[packet.data_id]
             decoder = Decoder(packet.K, packet.K + packet.M)
@@ -170,7 +172,7 @@ class FECCodec(QObject):
         try:
             return self.data_buffer.popleft()
         except Exception as e:
-            print("data buffer is empty",e)
+            logging.info(f"data buffer is empty {e}")
             return None
   
     

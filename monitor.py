@@ -1,18 +1,31 @@
-from PyQt5.QtCore import Qt,pyqtSignal
-from qfluentwidgets import FluentIcon,FluentIconBase,TransparentPushButton,TransparentToolButton,TransparentDropDownPushButton,RoundMenu,Action,PushButton,FlowLayout
-from PyQt5.QtGui import QCloseEvent, QIcon,QColor,QImage,QPixmap
-from PyQt5.QtCore import Qt,QTimer
-from PyQt5.QtWidgets import *
 from datetime import datetime
-from pkg.quic import HighwayQuicClient
-from protocol.highway_pb2 import Device,Video,DeviceParam
-from pkg.codec import H264Decoder
+import logging
 import time
-from view.wave import WaveformWidget
+
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import QTimer, Qt
+from PyQt5.QtGui import QCloseEvent, QColor, QIcon, QImage, QPixmap
+from PyQt5.QtWidgets import *
 import numpy as np
+from qfluentwidgets import (
+    Action,
+    FlowLayout,
+    FluentIcon,
+    FluentIconBase,
+    PushButton,
+    RoundMenu,
+    TransparentDropDownPushButton,
+    TransparentPushButton,
+    TransparentToolButton,
+)
+
+from pkg.codec import H264Decoder
 from pkg.model import Setting
-from view.video_display import VideoDisplayWidget
+from pkg.quic import HighwayQuicClient
+from protocol.highway_pb2 import Device, DeviceParam, Video
 from view.imu import IMUWidget
+from view.video_display import VideoDisplayWidget
+from view.wave import WaveformWidget
 
 class StatusBar(QWidget):
     param_changed=pyqtSignal(dict)
@@ -115,20 +128,20 @@ class StatusBar(QWidget):
         })
     
     def __handle_channel_menu_triggered(self,action:Action):
-        print(action.text())
+        logging.info(action.text())
         self.channel.setText("线路: "+action.text())
         self.__handel_setting_changed()
 
     def __handle_video_format_menu_triggered(self,action:Action):
-        print(action.text())
+        logging.info(action.text())
         self.video_format.setText("视频格式: "+action.text())
         self.__handel_setting_changed()
     def __handle_resolution_menu_triggered(self,action:Action):
-        print(action.text())
+        logging.info(action.text())
         self.resolution.setText("清晰度: "+action.text())
         self.__handel_setting_changed()
     def __handle_bABR_menu_triggered(self,action:Action):
-        print(action.text())
+        logging.info(action.text())
         self.bABR.setText("码率自适应: "+action.text())
         self.__handel_setting_changed()
     def __init__(self):
@@ -198,7 +211,7 @@ class Monitor(QWidget):
         self.statusBar.param_changed.connect(self.param_changed)
     
     def update_device_param(self,data:DeviceParam):
-        print(data)
+        logging.info(data)
         # self.imu.update_imu_data(data.imu_param)
 
     def update_wave_form(self,value:np.ndarray):
@@ -229,7 +242,7 @@ class Monitor(QWidget):
             self.display.setPixmap(scaled_pixmap)
         
         except Exception as e:
-            print(f"Error displaying video: {str(e)}")
+            logging.info(f"Error displaying video: {str(e)}")
 
 
 

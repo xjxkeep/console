@@ -1,17 +1,19 @@
-from PyQt5.QtWidgets import *
-from qfluentwidgets import *
-from PyQt5.QtCore import Qt
-import os
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import QApplication
- # Generate QR code using qrcode library
-import qrcode
-from PyQt5.QtGui import QPixmap
 from io import BytesIO
-from view.common import BLineEdit,TLineEdit
+import logging
+import os
+
+from PyQt5.QtCore import Qt
+from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtGui import QPixmap
+from PyQt5.QtWidgets import *
+from PyQt5.QtWidgets import QApplication
 import hid
+from qfluentwidgets import *
+import qrcode
+
 from pkg.hid_caller import HID
 from pkg.model import HIDBody
+from view.common import BLineEdit, TLineEdit
 class InfoItem(QWidget):
     def __init__(self,parent=None,label=None,info=None,secret=False):
         super().__init__(parent)
@@ -137,7 +139,7 @@ class HIDDebug(HeaderCardWidget):
     def call_function(self):
         try:
             request_id=self.hid.call_function("get_device_info",{})
-            print("request_id:",request_id)
+            logging.info(f"request_id: {request_id}")
         except Exception as e:
             self.content.append("响应:" + str(e))
      

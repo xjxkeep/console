@@ -1,8 +1,9 @@
-from PyQt5.QtCore import QObject,pyqtSignal,QTimer
+import importlib
+import logging
 import threading
 import time
-import importlib
 
+from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 class ControllerBase(QObject):
     signal=pyqtSignal(list) # (values)
     def __init__(self) -> None:
@@ -38,7 +39,7 @@ class JoyStick(ControllerBase):
         try:
             with self._lock:
                 if not self._pygame_initialized:
-                    print("pygame not initialized")
+                    logging.info("pygame not initialized")
                     return []
                 
                 for i in range(pygame.joystick.get_count()):
@@ -48,7 +49,7 @@ class JoyStick(ControllerBase):
                         'name': joy.get_name()
                     })
         except Exception as e:
-            print(f"Error getting device list: {e}")
+            logging.info(f"Error getting device list: {e}")
         return devices
     
         
@@ -63,28 +64,28 @@ class JoyStick(ControllerBase):
                     try:
                         self.joystick.quit()
                     except Exception as e:
-                        print(f"Error quitting joystick: {e}")
+                        logging.info(f"Error quitting joystick: {e}")
                     self.joystick = None
                 
                 # 确保pygame已初始化
                 if not self._pygame_initialized:
-                    print("pygame not initialized")
+                    logging.info("pygame not initialized")
                     return False
                 
                 if device_id >= pygame.joystick.get_count():
-                    print(f"Device ID {device_id} out of range")
+                    logging.info(f"Device ID {device_id} out of range")
                     return False
                     
                 self.joystick = pygame.joystick.Joystick(device_id)
                 self.joystick.init()
                 self.device_id = device_id
-                print(f"Selected joystick device {device_id}: {self.joystick.get_name()}")
+                logging.info(f"Selected joystick device {device_id}: {self.joystick.get_name()}")
                 return True
         except pygame.error as e:
-            print(f"Pygame error selecting device: {e}")
+            logging.info(f"Pygame error selecting device: {e}")
             return False
         except Exception as e:
-            print(f"Error selecting device: {e}")
+            logging.info(f"Error selecting device: {e}")
             return False
         
 
@@ -111,7 +112,7 @@ class JoyStick(ControllerBase):
                     values.append(value * 100)
                 self.signal.emit(values)
         except Exception as e:
-            print(f"Error in joystick update: {e}")
+            logging.info(f"Error in joystick update: {e}")
             # 如果出现错误，尝试重新初始化手柄
             self._handle_joystick_error()
     
@@ -130,16 +131,16 @@ class JoyStick(ControllerBase):
                 if self.device_id is not None:
                     self.select_device(self.device_id)
         except Exception as e:
-            print(f"Error handling joystick error: {e}")
+            logging.info(f"Error handling joystick error: {e}")
     
     def close(self):
         """优雅关闭手柄组件"""
-        print("Closing joystick...")
+        logging.info("Closing joystick...")
         
         # 停止定时器
         if self.timer:
             self.timer.stop()
-            print("joystick timer stop")
+            logging.info("joystick timer stop")
         
         # 设置运行标志为False
         self.running = False
@@ -150,9 +151,9 @@ class JoyStick(ControllerBase):
                 if self.joystick:
                     try:
                         self.joystick.quit()
-                        print("joystick device quit")
+                        logging.info("joystick device quit")
                     except Exception as e:
-                        print(f"Error quitting joystick device: {e}")
+                        logging.info(f"Error quitting joystick device: {e}")
                     self.joystick = None
                 
                 # 关闭pygame
@@ -160,19 +161,19 @@ class JoyStick(ControllerBase):
                     try:
                         pygame.quit()
                         self._pygame_initialized = False
-                        print("pygame quit")
+                        logging.info("pygame quit")
                     except Exception as e:
-                        print(f"Error quitting pygame: {e}")
+                        logging.info(f"Error quitting pygame: {e}")
         except Exception as e:
-            print(f"Error in joystick close: {e}")
+            logging.info(f"Error in joystick close: {e}")
         
-        print("joystick close completed")
+        logging.info("joystick close completed")
 
 
 if __name__=="__main__":
     joystick=JoyStick()
     joystick.init()
     
-    print(joystick.get_device_list())
+    logging.info(joystick.get_device_list())
     time.sleep(2)
     joystick.close()

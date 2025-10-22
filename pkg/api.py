@@ -1,11 +1,13 @@
-import requests
-import hashlib
 import base64
-import time
+import hashlib
 import json
-from pkg.model import Device,DeviceResponse,Version,VersionResponse,Setting
-from PyQt5.QtCore import QObject, QThread
+import logging
+import time
 
+from PyQt5.QtCore import QObject, QThread
+import requests
+
+from pkg.model import Device, DeviceResponse, Setting, Version, VersionResponse
 
 class Promise(QThread):
     
@@ -18,18 +20,18 @@ class Promise(QThread):
     
     def run(self):
         try:
-            print("promise run")
+            logging.info("promise run")
             resp=self.func()
-            print("promise response",resp)
+            logging.info(f"promise response {resp}")
             if self._then:
                 self._then(resp)
         except Exception as e:
-            print("promise error",e)
+            logging.info(f"promise error {e}")
             if self._error:
                 self._error(e)
     
     def then(self,func:callable):
-        print("promise then",func)
+        logging.info(f"promise then {func}")
         self._then=func
         return self
 
@@ -112,7 +114,7 @@ class API:
         response = self._make_request("GET", path)
         response.raise_for_status()
         response = DeviceResponse.model_validate_json(json_data=response.content)
-        print("get_device_info response",response)
+        logging.info(f"get_device_info response {response}")
         device=response.data
         return device
     
@@ -149,4 +151,4 @@ class API:
     
     def close(self):
         self.deleteLater()
-        print("api closed")
+        logging.info("api closed")

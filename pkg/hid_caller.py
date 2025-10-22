@@ -1,11 +1,14 @@
-from PyQt5.QtCore import QObject, pyqtSignal, QThread
-from pkg.model import HIDBody   
-import uuid
-import hid
-import time
+import json
+import logging
 import queue
 import threading
-import json
+import time
+import uuid
+
+from PyQt5.QtCore import QObject, QThread, pyqtSignal
+import hid
+
+from pkg.model import HIDBody
 
 class HIDConnectionThread(QThread):
     connected = pyqtSignal()
@@ -30,7 +33,7 @@ class HIDConnectionThread(QThread):
                     self.is_connected=False
                 time.sleep(1)
             except Exception as e:
-                print(f"HID connection error: {e}")
+                logging.info(f"HID connection error: {e}")
                 time.sleep(1)
     
     def stop(self):
@@ -53,23 +56,23 @@ class HIDDataReceiverThread(QThread):
                 # 读取HID数据
                 data = self.hid_device.read(self.frame_size, timeout_ms=100)
                 if data:
-                    print("HID data received:",data)
+                    logging.info(f"HID data received: {data}")
                     json_str=bytes(data).strip(b'\x00').decode('utf-8', errors='ignore')
-                    print(json_str)
+                    logging.info(json_str)
                     if json_str:
                         try:
                             json_dict=json.loads(json_str)
                             hid_body=HIDBody(**json_dict)
-                            print("HID body:",hid_body)
+                            logging.info(f"HID body: {hid_body}")
                             self.data_received.emit(hid_body)
                         except json.JSONDecodeError as e:
-                            print(f"JSON解析失败: {e}, 数据: {json_str}")
+                            logging.info(f"JSON解析失败: {e}, 数据: {json_str}")
                         except Exception as e:
-                            print(f"HIDBody创建失败: {e}, 数据: {json_str}")
+                            logging.info(f"HIDBody创建失败: {e}, 数据: {json_str}")
                             pass
             except Exception as e:
                 if "timeout" not in str(e).lower():
-                    print(f"HID data read error: {e}")
+                    logging.info(f"HID data read error: {e}")
                 time.sleep(0.01)
   
     
@@ -127,11 +130,11 @@ class HID(QObject):
             self.data_receiver_thread.data_received.connect(self.data_received)
             self.data_receiver_thread.start()
             self.connected.emit()
-            print("HID device connected successfully")
+            logging.info("HID device connected successfully")
             self.call_function("get_device_info",{})
             
         except Exception as e:
-            print(f"Failed to connect to HID device: {e}")
+            logging.info(f"Failed to connect to HID device: {e}")
             self._on_device_disconnected()
 
 
@@ -158,7 +161,7 @@ class HID(QObject):
             self.pending_requests.clear()
         
         self.disconnected.emit()
-        print("HID device disconnected")
+        logging.info("HID device disconnected")
 
     
 
@@ -180,7 +183,7 @@ class HID(QObject):
                 time.sleep(0.001)
             
         except Exception as e:
-            print(f"Failed to send HID request: {e}")
+            logging.info(f"Failed to send HID request: {e}")
             raise
     
     def _serialize_request_packets(self, request: HIDBody) -> list:
@@ -207,7 +210,7 @@ class HID(QObject):
             return packets
             
         except Exception as e:
-            print(f"Failed to serialize request packets: {e}")
+            logging.info(f"Failed to serialize request packets: {e}")
             raise
 
 

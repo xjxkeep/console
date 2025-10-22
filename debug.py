@@ -3,6 +3,7 @@ from qfluentwidgets import *
 from PyQt5.QtCore import Qt
 from PyQt5.QtCore import pyqtSignal
 from pkg.model import Setting
+import logging
 class Uploader(QWidget):
     fileToSend=pyqtSignal(str)
     def __init__(self):
@@ -143,7 +144,7 @@ class Debug(ScrollArea):
         self.setting_list=[]
         self.settingItemMap=dict()
         for key,value in self.setting.model_dump().items():
-            print("key",key,"value",value)
+            logging.info(f"key {key} value {value}")
             if key=="channels":
                 continue
             item=SettingItem(key,value)
@@ -179,7 +180,7 @@ class Debug(ScrollArea):
     
     
     def saveSetting(self):
-        print("save",self.getSetting())
+        logging.info(f"save {self.getSetting()}")
         with open("setting.json", "w") as f:
             json.dump(self.getSetting(), f)
 

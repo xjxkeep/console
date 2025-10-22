@@ -1,7 +1,8 @@
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPainter, QColor
+import logging
 
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor, QPainter
+from PyQt5.QtWidgets import *
 class Overlay(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -63,7 +64,7 @@ class MainWindow(QMainWindow):
             self.overlay.move(0, 0)  # 确保蒙层位置正确
             self.overlay.raise_()  # 确保蒙层在最顶层
             self.overlay.highlight(self.button2)
-            print(self.button2.geometry())
+            logging.info(self.button2.geometry())
             self.overlay.show()
 
     def resizeEvent(self, event):

@@ -1,13 +1,15 @@
 import asyncio
-import paho.mqtt.client as mqtt
-from PyQt5.QtCore import QObject,pyqtSignal
-import threading
-from protocol.video_pb2 import VideoAttributeMessage
-import time
-from queue import Queue
-from pkg.model import MqttMessage,Setting
 import hashlib
+import logging
+from queue import Queue
+import threading
+import time
 
+from PyQt5.QtCore import QObject, pyqtSignal
+import paho.mqtt.client as mqtt
+
+from pkg.model import MqttMessage, Setting
+from protocol.video_pb2 import VideoAttributeMessage
 
 def get_uuid(device_id: str, subscribe_id: str) -> str:
     """
@@ -67,12 +69,12 @@ class MQTTClient:
     def __run(self):
         while self.running:
             try:
-                print("mqtt client loop start")
+                logging.info("mqtt client loop start")
                 self.client.connect(self.host,self.port,60)
                 self.client.loop_start()
                 self.client.on_connect=self.__on_connect
             except Exception as e:
-                print("mqtt client connect error",e)
+                logging.info(f"mqtt client connect error {e}")
                 for _ in range(100):
                     if not self.running:
                         break
@@ -83,14 +85,14 @@ class MQTTClient:
                     message=self.fifo.get(timeout=1)  # 添加超时，避免永久阻塞
                     if message is self._stop_sentinel:
                         break  # 收到退出信号，退出循环
-                    print(self.setting_topic,"publish  video setting",message)
+                    logging.info(f"{self.setting_topic} publish video setting {message}")
                     self.client.publish(self.setting_topic, message, qos=1)
                 except:
                     # 超时或其他异常，继续循环检查running状态
                     continue
 
     def __on_connect(self,client,userdata,flags,rc):
-        print("connected to mqtt server")
+        logging.info("connected to mqtt server")
     
 
     def update_video_setting_sync(self,resolution,video_encode_type,bABR):
@@ -115,7 +117,7 @@ class MQTTClient:
         self.fifo.put(mqtt_message.model_dump_json())
         
     def close(self):
-        print("mqtt client close")
+        logging.info("mqtt client close")
         self.running=False
         # 发送退出信号到队列，唤醒被阻塞的线程
         self.fifo.put_nowait(self._stop_sentinel)
@@ -123,7 +125,7 @@ class MQTTClient:
             self.client.disconnect()
         if self.thread is not None:
             self.thread.join()
-        print("mqtt client close end")
+        logging.info("mqtt client close end")
        
         
         

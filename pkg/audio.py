@@ -1,11 +1,14 @@
-import av
-import sounddevice as sd
-import numpy as np
-from pkg.buffer import BufferStream
-from PyQt5.QtCore import QObject,pyqtSignal,pyqtSlot,QThread
+import logging
+from queue import Queue
 import sys
 import time
-from queue import Queue
+
+from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
+import av
+import numpy as np
+import sounddevice as sd
+
+from pkg.buffer import BufferStream
 # g726 8000
 class AudioRecorder(QObject):
     frame_encoded = pyqtSignal()
@@ -28,14 +31,14 @@ class AudioRecorder(QObject):
 
     def audio_callback(self,indata,frames,time_info,status):
         if status:
-            print(status,file=sys.stderr)
+            logging.info(f"{status}", file=sys.stderr)
         pcm=np.frombuffer(indata,dtype=np.int16)
         pcm=np.clip(pcm*self.scale, -32768, 32767)
         frame=av.AudioFrame.from_ndarray(pcm.reshape(1, -1),layout="mono")
         frame.sample_rate=self.samplerate
         frame.pts=self.pts
         self.pts+=len(pcm)
-        print("callback frame",frame)
+        logging.info(f"callback frame {frame}")
         self.fifo.put(frame)
 
     @pyqtSlot()
@@ -64,15 +67,15 @@ class AudioRecorder(QObject):
                         break
                    
                     for packet in stream.encode(frame):
-                        print("encode packet",packet)
+                        logging.info(f"encode packet {packet}")
                         container.mux(packet)
                         self.frame_encoded.emit()
             self.fifo.put(None)
             container.close()
         except Exception as e:
             import traceback
-            traceback.print_exc()
-            print(f"AudioRecorder run_task error: {e}")
+            traceback.logging.info_exc()
+            logging.info(f"AudioRecorder run_task error: {e}")
 
 
     def close(self):
@@ -94,12 +97,12 @@ class AudioPlayer(QObject):
         self.fifo=Queue()
    
     def write(self,data):
-        print("write",len(data))
+        logging.info(f"write {len(data)}")
         self.reader.write(data)
 
     def audio_callback(self,outdata,frames,time_info,status):
         data=self.fifo.get()
-        print("audio_callback get outdata",data.shape)
+        logging.info(f"audio_callback get outdata {data.shape}")
         if data is None:
             outdata[:]=0
             return False
@@ -128,7 +131,7 @@ class AudioPlayer(QObject):
             ):
                 while self.running:
                     for frame in container.decode(stream):
-                        print("decode frame",frame)
+                        logging.info(f"decode frame {frame}")
                         pcm=frame.to_ndarray()
                         pcm=np.clip(pcm*self.scale, -32768, 32767)
                         if not self.running: break
@@ -136,7 +139,7 @@ class AudioPlayer(QObject):
          
             container.close()
         except Exception as e:
-            print(f"AudioPlayer run_task error: {e}")
+            logging.info(f"AudioPlayer run_task error: {e}")
       
     
     @pyqtSlot()

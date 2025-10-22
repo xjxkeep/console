@@ -6,6 +6,7 @@ import sys
 from PyQt5.QtCore import QTimer
 from pkg.joystick import JoyStick  
 from pkg.model import Setting
+import logging
 class Channel(QWidget):
     channelSignal=pyqtSignal(int)
     def setupUi(self):
@@ -94,8 +95,8 @@ class Detector(QWidget):
             devices.append(joy["name"])
             self.deviceMap[deviceCount]={"id":joy["id"],"type":"joystick"} # type需要和变量名一致
             deviceCount+=1
-        print(devices)
-        print(self.deviceMap)
+        logging.info(devices)
+        logging.info(self.deviceMap)
         return devices
     
     def refreshDevices(self):
@@ -105,7 +106,7 @@ class Detector(QWidget):
     def close(self):
         if hasattr(self,"joystick"):
             self.joystick.close()
-            print("detector joystick close")
+            logging.info("detector joystick close")
         super().close()
     
     def lazy_init(self):
@@ -135,8 +136,8 @@ class Controller(ScrollArea):
         self.channels=[Channel() for _ in range(self.channelCount)]
         for idx,channel in enumerate(self.channels):
             channel.setLabel(f"Channel{idx+1}")
-            print("channel",idx)
-            print("setting.channels",self.setting.channels)
+            logging.info(f"channel {idx}")
+            logging.info(f"setting.channels {self.setting.channels}")
             channel.setFineTune(self.setting.channels[idx] if idx<len(self.setting.channels) else 0)
             layout.addWidget(channel)
         self.widget().setLayout(layout)
@@ -171,9 +172,9 @@ class Controller(ScrollArea):
     
     def close(self):
         self.timer.stop()
-        print("controller timer stop")
+        logging.info("controller timer stop")
         self.detector.close()
-        print("controller detector close")
+        logging.info("controller detector close")
         super().close()
 
     
