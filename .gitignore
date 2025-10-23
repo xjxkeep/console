@@ -21,3 +21,4 @@ build/
 application
 .setting.json
 logs/
+*.log

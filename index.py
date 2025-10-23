@@ -29,6 +29,7 @@ class MainWindow(FluentWindow):
     
     def setupUi(self):
         from monitor import Monitor
+        from view.video import VideoPlayer
         from controller import Controller
         from debug import Debug
         from about import About
@@ -43,7 +44,8 @@ class MainWindow(FluentWindow):
             self.move(self.setting.window_x,self.setting.window_y)
         
 
-        self.debug_monitor=Monitor(self.setting)
+        self.debug_monitor=VideoPlayer()
+        self.debug_monitor.setWindowTitle("Camera Live")
         
 
         self.addSubInterface(self.monitor,FluentIcon.MOVIE, "Monitor")
@@ -104,9 +106,6 @@ class MainWindow(FluentWindow):
         self.monitor.sendTestCodecSignal.connect(self.debug_monitor.show)
         
         self.monitor.param_changed.connect(self.__handle_param_changed)
-        # debug 发送文件 更新进度
-        self.debug.uploader.fileToSend.connect(self.quic_client.send_file)
-        self.quic_client.file_send_progress.connect(self.debug.uploader.updateProgress)
 
         self.settingView.hid_response.connect(self._handle_hid_response)
         

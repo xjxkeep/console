@@ -78,7 +78,7 @@ class HighwayClientProtocol(QuicConnectionProtocol,QObject):
     
     def connection_lost(self, exc):
         """重写连接丢失处理方法"""
-        logging.info(f"传输层连接丢失: {exc}")
+        logging.info(f"传输层连接中断: {exc}")
         self._connection_lost = True
         self.quic_connection_lost.emit()
         return super().connection_lost(exc)
@@ -278,11 +278,11 @@ class HighwayQuicClient(QObject):
         self.loop = asyncio.new_event_loop()
         
         # 在单独线程中运行事件循环
-        self.thread = QThread()
-        self.moveToThread(self.thread)
-        self.thread.started.connect(self._run_async_loop)
-        self.thread.finished.connect(self.deleteLater)
-        self.thread.start()
+        self._thread = QThread()
+        self.moveToThread(self._thread)
+        self._thread.started.connect(self._run_async_loop)
+        self._thread.finished.connect(self.deleteLater)
+        self._thread.start()
     
     def _run_async_loop(self):
         """在单独线程中运行异步事件循环"""
@@ -306,19 +306,6 @@ class HighwayQuicClient(QObject):
         for task in self.tasks:
             if not task.done():
                 task.cancel()
-        
-        # 关闭客户端连接
-        if self.client:
-            try:
-                self.client.close()
-                # 使用asyncqt的run_until_complete
-                self.loop.run_until_complete(self.client.wait_closed())
-                logging.info("client closed")
-            except Exception as e:
-                logging.error(f"关闭客户端时出错: {e}")
-                # 强制关闭
-                if hasattr(self.client, '_quic'):
-                    self.client._quic.close()
         
         # 关闭视频编码器
         if self.video_encoder_thread.isRunning():
@@ -349,11 +336,22 @@ class HighwayQuicClient(QObject):
             self.audio_player_worker.close()
             self.audio_player_thread.wait()
         logging.info("audio player closed")
-        
+         # 关闭客户端连接
+        if self.client:
+            try:
+                self.client.close()
+                # 使用asyncqt的run_until_complete
+                self.loop.create_task(self.client.wait_closed())
+                logging.info("client closed")
+            except Exception as e:
+                logging.error(f"关闭客户端时出错: {e}")
+                # 强制关闭
+                if hasattr(self.client, '_quic'):
+                    self.client._quic.close()
         # 停止线程和事件循环
-        if hasattr(self, 'thread') and self.thread.isRunning():
-            self.thread.quit()
-            self.thread.wait()
+        if hasattr(self, '_thread') and self._thread.isRunning():
+            self._thread.quit()
+            self._thread.wait()
         if self.loop and self.loop.is_running():
             self.loop.stop()
         logging.info("event loop stopped")
@@ -742,6 +740,7 @@ class HighwayQuicClient(QObject):
                 data=self.package_message(video)
                 # self.loop.call_soon_threadsafe(self.client.send_datagram, data)
                 # logging.info("send datagram frame id ",video.frame_id," size ",len(data))
+                self.upload_bytes+=len(data)
                 success = self.client.send_datagram(data)
                 if not success:
                     logging.warning("发送视频数据报失败，连接可能已断开")
@@ -770,6 +769,7 @@ class HighwayQuicClient(QObject):
         data=self.client.receive_datagram()
         if data is None:
             return
+        self.download_bytes+=len(data)
         header=data[:4]
         length = (header[2]&0xff | (header[3]&0xff)<<8)
         data=data[4:4+length]

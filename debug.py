@@ -5,45 +5,6 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtCore import pyqtSignal
 from pkg.model import Setting
 import logging
-class Uploader(QWidget):
-    fileToSend=pyqtSignal(str)
-    def __init__(self):
-        super().__init__()
-        self.setupUi()
-        self.filePath=None
-    
-    def setupUi(self):
-        self.setLayout(QVBoxLayout())
-        self.progressBar=QProgressBar()
-        self.progressBar.setRange(0,100)
-        self.progressBar.setValue(0)
-        layout=QHBoxLayout()
-        self.openFileButton=PushButton("Open File")
-        self.openFileButton.clicked.connect(self.openFile)
-        self.uploadButton=PushButton("Upload")
-        self.uploadButton.clicked.connect(self.upload)
-        layout.addWidget(self.openFileButton)
-        layout.addWidget(self.uploadButton)
-
-        self.fileLabel=BodyLabel()
-        self.fileLabel.setText("No file selected")
-        self.layout().addWidget(self.fileLabel)
-        self.layout().addLayout(layout)
-        self.layout().addWidget(self.progressBar)
-        
-    def openFile(self):
-        file,ok=QFileDialog.getOpenFileName(self,"Open File","","All Files (*)")
-        if ok:
-            self.progressBar.setValue(0)
-            self.filePath=file
-            self.fileLabel.setText(file)
-    
-    def upload(self):
-        self.fileToSend.emit(self.filePath)
-
-    def updateProgress(self,fileName,progress):
-        self.progressBar.setValue(progress)
-        self.progressBar.setFormat(f"{fileName} - {progress}%")
 
 class NumberSpinBox(QWidget):
     valueChanged=pyqtSignal(int)
@@ -142,9 +103,9 @@ class Debug(ScrollArea):
         layout=QVBoxLayout()
         
         # 添加日志级别选择器
-        log_level_group = QGroupBox("日志设置")
+        log_level_group = HeaderCardWidget("日志设置")
         log_level_layout = QHBoxLayout()
-        log_level_layout.addWidget(QLabel("日志级别:"))
+        log_level_layout.addWidget(BodyLabel("日志级别:"))
         
         self.log_level_combo = ComboBox()
         self.log_level_combo.addItems(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
@@ -181,7 +142,7 @@ class Debug(ScrollArea):
         log_manage_layout.addWidget(self.rotate_log_button)
         
         log_level_layout.addLayout(log_manage_layout)
-        log_level_group.setLayout(log_level_layout)
+        log_level_group.viewLayout.addLayout(log_level_layout)
         layout.addWidget(log_level_group)
         
         # 添加日志查看器
@@ -189,8 +150,6 @@ class Debug(ScrollArea):
         self.log_viewer = LogViewer()
         layout.addWidget(self.log_viewer)
         
-        self.uploader=Uploader()
-        layout.addWidget(self.uploader)
         self.setting_list=[]
         self.settingItemMap=dict()
         for key,value in self.setting.model_dump().items():
