@@ -31,6 +31,7 @@ from protocol.highway_pb2 import (
     Register,
     Video,
     VideoFeedback,
+    ClockSynchronizationParam,
 )
 
 
@@ -117,6 +118,7 @@ class HighwayQuicClient(QObject):
         
         self.send_frame_count=0
         
+        self.clock_offset=0
         self.control_stream_queue: Queue = Queue()
         self.latency_sum=0
         self.frame_latency_sum=0
@@ -412,6 +414,7 @@ class HighwayQuicClient(QObject):
                     self.create_task(self.establish_imu_stream())
                     self.create_task(self.establish_datagram_stream())
                     self.create_task(self.establish_feedback_stream())
+                    self.create_task(self.establish_ntp_stream())
                     
                     # self.create_task(self.establish_audio_stream())
                     # self.audio_encoder_thread.start()
@@ -658,6 +661,49 @@ class HighwayQuicClient(QObject):
                 )
                 future.result()  # 等待操作完成
     
+
+
+    async def establish_ntp_stream(self):
+        self.ntp_reader,self.ntp_writer=await self.client.create_stream(False)
+        register_msg = Register(
+            device=Device(
+                id=int(self.setting.device_id),
+                message_type=Device.MessageType.CLOCKSYNCHRONIZATIONPARAM
+            ),
+            subscribe_device=Device(
+                id=int(self.setting.source_device_id),
+                message_type=Device.MessageType.CLOCKSYNCHRONIZATIONPARAM
+            )
+        )
+        logging.info(f"send ntp register message {register_msg}")
+        await self.send_message(writer=self.ntp_writer,message=register_msg)
+        self.create_task(self.__send_ntp_message(writer=self.ntp_writer))
+        self.create_task(self.__read_ntp_stream(reader=self.ntp_reader))
+
+    async def __send_ntp_message(self,writer:asyncio.StreamWriter):
+        while self.running:
+            try:
+                ntp_param = ClockSynchronizationParam(req_tx_ms=int(time.time()*1000))
+                await self.send_message(writer=writer,message=ntp_param)
+                await asyncio.sleep(0.1)
+            except Exception as e:
+                logging.error(f"发送NTP消息错误: {e}")
+                break
+
+    async def __read_ntp_stream(self,reader:asyncio.StreamReader):
+        while self.running:
+            try:
+                message = await asyncio.wait_for(self.receive_message(reader), timeout=1.0)
+                ntp_param = ClockSynchronizationParam.FromString(message)
+                self.clock_offset=round(((ntp_param.req_rx_ms-ntp_param.req_tx_ms)+(ntp_param.resp_tx_ms-int(time.time()*1000)))/2)
+                logging.debug(f"receive ntp param message {ntp_param} clock_offset {self.clock_offset}")
+                await self.send_message(writer=self.ntp_writer,message=ntp_param)
+            except asyncio.TimeoutError:
+                continue
+            except Exception as e:
+                logging.error(f"读取NTP参数流错误: {e}")
+                break
+
     async def establish_feedback_stream(self):
         self.feedback_reader,self.feedback_writer=await self.client.create_stream(False)
         register_msg = Register(
@@ -771,7 +817,7 @@ class HighwayQuicClient(QObject):
         while self.running:
             await asyncio.sleep(1.0)
             if self.latency_count>0:
-                self.latency.emit(self.latency_sum//self.latency_count)
+                self.latency.emit(self.latency_sum//self.latency_count+self.clock_offset)
                 self.latency_sum=0
                 self.latency_count=0
     
