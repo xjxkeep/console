@@ -30,6 +30,7 @@ from protocol.highway_pb2 import (
     File,
     Register,
     Video,
+    VideoFeedback,
 )
 
 
@@ -410,6 +411,7 @@ class HighwayQuicClient(QObject):
                     self.create_task(self.establish_file_stream())
                     self.create_task(self.establish_imu_stream())
                     self.create_task(self.establish_datagram_stream())
+                    self.create_task(self.establish_feedback_stream())
                     
                     # self.create_task(self.establish_audio_stream())
                     # self.audio_encoder_thread.start()
@@ -656,7 +658,18 @@ class HighwayQuicClient(QObject):
                 )
                 future.result()  # 等待操作完成
     
+    async def establish_feedback_stream(self):
+        self.feedback_reader,self.feedback_writer=await self.client.create_stream(False)
+        register_msg = Register(
+            device=Device(
+                id=int(self.setting.device_id),
+                message_type=Device.MessageType.VIDEO_FEEDBACK
+            )
+        )
+        logging.info(f"send feedback register message {register_msg}")
+        await self.send_message(writer=self.feedback_writer,message=register_msg)
     
+
     
     async def establish_control_stream(self):
         self.control_reader,self.control_writer=await self.client.create_stream(False)
@@ -782,6 +795,10 @@ class HighwayQuicClient(QObject):
         video = Video.FromString(data)
     
         self.video_decoder_worker.write(video.raw)
+        if self.feedback_writer and self.loop:
+            asyncio.create_task(self.send_message(self.feedback_writer, VideoFeedback(received_frame_index=video.frame_id)))
+       
+
         # FIXME 如果传输的数据不是一个完整的NALU的话 会花屏
         # if video.slice_id == video.slice_count:
         #     # logging.info("send eof nal")

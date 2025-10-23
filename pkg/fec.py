@@ -175,6 +175,7 @@ class FECCodec(QObject):
             shard_idx=[p.block_index for p in packets]
             logging.debug(f"decoding data_id {packet.data_id} block_indexs {shard_idx}")
             decoded_data = decoder.decode(blocks, shard_idx,0)
+            logging.debug(f"decoded data_id {packet.data_id} decoded_data {len(decoded_data)} bytes")
             self.data_buffer.append(decoded_data)
             self.data_decoded.emit()
             self.frame_count+=1
