@@ -12,8 +12,9 @@ from pkg.model import Setting
 from protocol.highway_pb2 import Device, DeviceParam, Video
 from view.imu import IMUWidget
 from view.status import StatusBar
-from view.video import VideoPlayer
+from view.video import VideoPanel
 from view.wave import WaveformWidget
+from view.controller import ControlPanel
 
 
 # TODO imu 显示会导致无法resize窗口
@@ -28,20 +29,18 @@ class Monitor(QWidget):
         self.resize(800,600)
         
         # 使用QGridLayout来实现IMU控件在display右下角的布局
-        main_layout = QVBoxLayout()
+        main_layout = QGridLayout()
         self.statusBar = StatusBar()
-        main_layout.addWidget(self.statusBar)
+        
 
  
         
-        self.display =VideoPlayer("无信号，等待客户端连接...")
+        self.display =VideoPanel()
         self.display.fps_collected.connect(self.statusBar.update_fps)
         
-   
-        main_layout.addWidget(self.display)
-        
+  
         self.waveform = WaveformWidget()
-        main_layout.addWidget(self.waveform)
+        
         
   
         self.startButton = PushButton("连接服务器")
@@ -63,7 +62,15 @@ class Monitor(QWidget):
         buttonLayout.addWidget(self.sendTestVideoButton)
         buttonLayout.addWidget(self.sendTestDatagramButton)
         buttonLayout.addWidget(self.sendTestCodecButton)
-        main_layout.addLayout(buttonLayout)
+        
+        
+        self.controlPanel=ControlPanel()
+        
+        main_layout.addWidget(self.statusBar,0,0,1,2)
+        main_layout.addWidget(self.display,1,0)
+        main_layout.addWidget(self.waveform,2,0)
+        main_layout.addLayout(buttonLayout,3,0)
+        main_layout.addWidget(self.controlPanel,1,1,3,1)
         self.setLayout(main_layout)
         
         self.__frame = None
