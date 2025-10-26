@@ -685,7 +685,7 @@ class HighwayQuicClient(QObject):
             try:
                 ntp_param = ClockSynchronizationParam(req_tx_ms=int(time.time()*1000))
                 await self.send_message(writer=writer,message=ntp_param)
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(1)
             except Exception as e:
                 logging.error(f"发送NTP消息错误: {e}")
                 break
@@ -846,9 +846,9 @@ class HighwayQuicClient(QObject):
        
 
         # FIXME 如果传输的数据不是一个完整的NALU的话 会花屏
-        # if video.slice_id == video.slice_count:
-        #     # logging.info("send eof nal")
-        #     self.video_decoder_worker.write(b"\x00\x00\x00\x01\x09\x00")
+        if video.slice_id == video.slice_count:
+            logging.debug("send eof nal")
+            self.video_decoder_worker.write(b"\x00\x00\x00\x01\x09\x00")
         self.latency_sum+=int(time.time()*1000)-video.timestamp
         # logging.info("parse datagram frame id ",video.frame_id," latency ",int(time.time()*1000)-video.timestamp,"size",len(video.raw))
         PROTOBUF_LATENCY.labels(type="video").observe(int(time.time()*1000)-video.timestamp)
