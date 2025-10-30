@@ -1,3 +1,6 @@
+from typing import Any
+
+
 from collections import deque
 import copy
 import io
@@ -14,8 +17,9 @@ import numpy as np
 
 from pkg.buffer import BufferStream
 from pkg.metric import *
+av.logging.set_level(av.logging.DEBUG)
 
-class H264Decoder(QObject):
+class VideoDecoder(QObject):
     frame_decoded = pyqtSignal()
     def __init__(self,format='h264'):
         super().__init__()
@@ -26,7 +30,7 @@ class H264Decoder(QObject):
             "hevc":"hevc",
         }
         self.stream=BufferStream()
-        self.frames=deque()
+        self.frames=deque[Any]()
         self.format=format
         self.has_data = False
         self.running = True
@@ -61,11 +65,14 @@ class H264Decoder(QObject):
 
         # 优化解码器参数：减少缓冲区大小，启用低延迟模式
         options = {
-            'buffer_size': str(1024*512),  # 减少缓冲区大小，转换为字符串
+            'buffer_size': str(1024*1024*10),  # 减少缓冲区大小，转换为字符串
             'flags': 'low_delay',          # 启用低延迟标志
             'flags2': 'fast',              # 启用快速解码
             'threads': '1',                # 单线程解码，减少线程切换开销
-            'thread_type': 'slice'         # 使用slice线程类型
+            'thread_type': 'slice',        # 使用slice线程类型
+            # 提高探测参数，避免 "Could not find codec parameters" 提前失败
+            'analyzeduration': str(1_000_000),   # 约1秒（微秒）
+            'probesize': str(5_000_000),        # 5MB
         }
         self.container = av.open(self.stream, format=self.transform_map[self.format], options=options)
         try:

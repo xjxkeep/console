@@ -106,6 +106,7 @@ class MainWindow(FluentWindow):
         self.monitor.sendTestCodecSignal.connect(self.debug_monitor.show)
         
         self.monitor.param_changed.connect(self.__handle_param_changed)
+        
 
         self.settingView.hid_response.connect(self._handle_hid_response)
         
@@ -115,7 +116,6 @@ class MainWindow(FluentWindow):
     
     def __handle_param_changed(self,param:dict):
         logging.info(f"param changed {param}")
-        self.quic_client.change_video_format(param.get("video_format","H.264"))
         self.mqtt_client.update_video_setting_sync(param.get("resolution","高清"),param.get("video_format","H.264"),param.get("bABR","关闭"))
         
     
@@ -125,12 +125,13 @@ class MainWindow(FluentWindow):
             self.debug_monitor.setPixmap(pixmap)
     
     def update_monitor(self):
-        if self.quic_client.video_decoder_worker:
-            pixmap=self.quic_client.video_decoder_worker.get_frame()
-            if not pixmap: return
-            self.monitor.setPixmap(pixmap)
-            DISPLAY_FRAME_COUNT.inc()
-            
+        pixmap=None
+        if pixmap is None and self.quic_client.h264_decoder_worker:
+            pixmap=self.quic_client.h264_decoder_worker.get_frame()
+        if pixmap is None and self.quic_client.h265_decoder_worker:
+            pixmap=self.quic_client.h265_decoder_worker.get_frame()
+        if pixmap is None: return
+        self.monitor.setPixmap(pixmap)
     def _handle_hid_response(self,response:HIDBody):
         logging.info(f"hid response {response}")
         try:

@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pkg.codec import H264Encoder, H264Decoder
+from pkg.codec import H264Encoder, VideoDecoder
 from PyQt5.QtCore import QCoreApplication, QObject, QThread, pyqtSlot, QTimer
 from PyQt5.QtWidgets import QApplication
 import time
@@ -15,7 +15,7 @@ class CodecTest(QObject):
     def __init__(self):
         super().__init__()
         self.encoder = H264Encoder()
-        self.decoder = H264Decoder()
+        self.decoder = VideoDecoder()
         self.test_running = False
         self.decode_frame_count = 0
         self.encode_frame_count = 0

@@ -113,7 +113,7 @@ class DashboardGauge(QWidget):
         painter.setPen(pen)
         
         start16, span16 = self._compute_arc16(
-            critical_start_deg, self._end_deg, self._clockwise
+            0, -60, self._clockwise
         )
         
         rect = QRectF(
@@ -123,7 +123,12 @@ class DashboardGauge(QWidget):
             radius * 2
         )
         painter.drawArc(rect, start16, span16)
-        
+        pen.setColor(QColor(200, 150, 0))
+        painter.setPen(pen)
+        start16, span16 = self._compute_arc16(
+            60, 0, self._clockwise
+        )
+        painter.drawArc(rect, start16, span16)
         painter.restore()
 
     def _draw_scales(self, painter, center_x, center_y, radius):
@@ -249,7 +254,7 @@ class DashboardGauge(QWidget):
         painter.setFont(font)
         painter.setPen(QPen(self._text_color))
         
-        value_text = f"{int(self._value) if self._value.is_integer() else round(self._value, 1)}"
+        value_text = f"{ round(self._value, 1)}"
         value_rect = QRectF(center_x - 50, center_y - 20, 100, 40)
         painter.drawText(value_rect, Qt.AlignCenter, value_text)
         

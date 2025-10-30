@@ -17,7 +17,7 @@ from google.protobuf.message import Message
 import numpy as np
 
 from pkg.audio import AudioPlayer, AudioRecorder
-from pkg.codec import H264Decoder, H264Encoder
+from pkg.codec import VideoDecoder, H264Encoder
 from pkg.fec import FECCodec
 from pkg.metric import *
 from pkg.model import Setting
@@ -140,12 +140,19 @@ class HighwayQuicClient(QObject):
         
         
         # 视频解码
-        self.video_decoder_thread=QThread()
-        self.video_decoder_worker=H264Decoder()
-        self.video_decoder_worker.frame_decoded.connect(self.receive_video.emit)
-        self.video_decoder_worker.moveToThread(self.video_decoder_thread)
-        self.video_decoder_thread.started.connect(self.video_decoder_worker.frame_decode_task)
-        self.video_decoder_thread.finished.connect(self.video_decoder_worker.deleteLater)
+        self.h264_decoder_thread=QThread()
+        self.h264_decoder_worker=VideoDecoder(format="h264")
+        self.h264_decoder_worker.frame_decoded.connect(self.receive_video.emit)
+        self.h264_decoder_worker.moveToThread(self.h264_decoder_thread)
+        self.h264_decoder_thread.started.connect(self.h264_decoder_worker.frame_decode_task)
+        self.h264_decoder_thread.finished.connect(self.h264_decoder_worker.deleteLater)
+
+        self.h265_decoder_thread=QThread()
+        self.h265_decoder_worker=VideoDecoder(format="h265")
+        self.h265_decoder_worker.frame_decoded.connect(self.receive_video.emit)
+        self.h265_decoder_worker.moveToThread(self.h265_decoder_thread)
+        self.h265_decoder_thread.started.connect(self.h265_decoder_worker.frame_decode_task)
+        self.h265_decoder_thread.finished.connect(self.h265_decoder_worker.deleteLater)
         
         # 视频编码
         self.video_test_mode=0 # 0: stream 1: datagram 2: without send
@@ -173,25 +180,6 @@ class HighwayQuicClient(QObject):
         
         self.tasks: List[asyncio.Task] = []
         
-    
-    # TODO 用map[format]decoder 切换更顺滑
-    def change_video_format(self,format):
-        if format!=self.video_decoder_worker.format:
-            self.video_decoder_worker.frame_decoded.disconnect()
-            self.video_decoder_worker.close()
-            self.video_decoder_thread.quit()
-            self.video_decoder_thread.started.disconnect()
-            self.video_decoder_thread.wait() # TODO 耗时高的话就不wait了 应该也没问题
-            
-            self.video_decoder_thread=QThread()
-            self.video_decoder_worker=H264Decoder(format=format)
-            self.video_decoder_worker.moveToThread(self.video_decoder_thread)
-            self.video_decoder_thread.started.connect(self.video_decoder_worker.frame_decode_task)
-            self.video_decoder_thread.finished.connect(self.video_decoder_worker.deleteLater)
-            self.video_decoder_worker.frame_decoded.connect(self.receive_video.emit)
-            self.video_decoder_thread.start()
-            
-            
 
     def reconnect_video_stream(self):
         logging.info("reconnect video stream")
@@ -319,13 +307,18 @@ class HighwayQuicClient(QObject):
         logging.info("video encoder closed")
 
         # 关闭视频解码器
-        if self.video_decoder_thread.isRunning():
-            self.video_decoder_thread.quit()
-            self.video_decoder_worker.frame_decoded.disconnect()
-            self.video_decoder_worker.close()
-            self.video_decoder_thread.wait()
-        logging.info("video decoder closed")
-
+        if self.h264_decoder_thread.isRunning():
+            self.h264_decoder_thread.quit()
+            self.h264_decoder_worker.frame_decoded.disconnect()
+            self.h264_decoder_worker.close()
+            self.h264_decoder_thread.wait()
+        logging.info("h264 video decoder closed")
+        if self.h265_decoder_thread.isRunning():
+            self.h265_decoder_thread.quit()
+            self.h265_decoder_worker.frame_decoded.disconnect()
+            self.h265_decoder_worker.close()
+            self.h265_decoder_thread.wait()
+        logging.info("h265 video decoder closed")
         # 关闭音频编码器
         if self.audio_encoder_thread.isRunning():
             self.audio_encoder_thread.quit()
@@ -611,8 +604,8 @@ class HighwayQuicClient(QObject):
         logging.info(f"send video register message {register_msg}")
         await self.send_message(writer=self.video_writer,message=register_msg)
 
-        self.video_decoder_thread.start()
-  
+        self.h264_decoder_thread.start()
+        self.h265_decoder_thread.start()
         self.create_task(self.__read_video_stream(reader=self.video_reader))
     
     
@@ -810,7 +803,7 @@ class HighwayQuicClient(QObject):
         if data is None:
             return
         # logging.info("receive video data ",len(data),"decoder buffer size:",self.video_encoder_worker.buffer.size())
-        self.video_decoder_worker.write(data)
+        self.h264_decoder_worker.write(data)
    
     
     async def __metric_collect(self):
@@ -839,8 +832,10 @@ class HighwayQuicClient(QObject):
         
         
         video = Video.FromString(data)
-    
-        self.video_decoder_worker.write(video.raw)
+        if video.code_type == Video.CodeType.H265:
+            self.h265_decoder_worker.write(video.raw)
+        else:
+            self.h264_decoder_worker.write(video.raw)
         if self.feedback_writer and self.loop:
             asyncio.create_task(self.send_message(self.feedback_writer, VideoFeedback(received_frame_index=video.frame_id)))
        
@@ -848,7 +843,7 @@ class HighwayQuicClient(QObject):
         # FIXME 如果传输的数据不是一个完整的NALU的话 会花屏
         if video.slice_id == video.slice_count:
             logging.debug("send eof nal")
-            self.video_decoder_worker.write(b"\x00\x00\x00\x01\x09\x00")
+            self.h264_decoder_worker.write(b"\x00\x00\x00\x01\x09\x00")
         self.latency_sum+=int(time.time()*1000)-video.timestamp
         # logging.info("parse datagram frame id ",video.frame_id," latency ",int(time.time()*1000)-video.timestamp,"size",len(video.raw))
         PROTOBUF_LATENCY.labels(type="video").observe(int(time.time()*1000)-video.timestamp)

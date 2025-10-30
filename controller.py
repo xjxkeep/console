@@ -1,24 +1,42 @@
-from PyQt5.QtWidgets import QWidget
-from qfluentwidgets import *
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import *
-import sys
-from PyQt5.QtCore import QTimer
-from pkg.joystick import JoyStick  
-from pkg.model import Setting
 import logging
+import sys
+from typing import Any
+import typing
+
+from PyQt5 import QtCore
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import QTimer
+from PyQt5.QtWidgets import QWidget
+from PyQt5.QtWidgets import *
+from qfluentwidgets import (
+    BodyLabel,
+    ComboBox,
+    FluentIcon,
+    GroupHeaderCardWidget,
+    PillPushButton,
+    ProgressBar,
+    ScrollArea,
+    SpinBox,
+    Theme,
+    TransparentPushButton,
+    TransparentToolButton,
+    setTheme,
+)
+
+from pkg.joystick import JoyStick
+from pkg.model import Setting
 class Channel(QWidget):
-    channelSignal=pyqtSignal(int)
+    valueChanged=pyqtSignal(int)
     def setupUi(self):
         layout=QHBoxLayout()
-        self.label=BodyLabel("Channel")
+        self.label=BodyLabel("通道")
         self.progressBar=ProgressBar(useAni=False)
         self.fineTune=SpinBox(self)
         self.fineTune.setMinimum(-100)
         self.fineTune.setMaximum(100)
         self.fineTune.setValue(0)
         self.channelValue=0
-        self.reverse=PillPushButton("Reverse",self)
+        self.reverse=PillPushButton("反向",self)
         layout.addWidget(self.reverse)
         layout.addWidget(self.label)
         layout.addWidget(self.progressBar)
@@ -26,14 +44,15 @@ class Channel(QWidget):
         self.reverseFlag=False
         self.reverse.clicked.connect(self.setReverse)
         self.fineTune.valueChanged.connect(self.onFineTuneChanged)
-        self.progressBar.valueChanged.connect(self.channelSignal.emit)
+        self.progressBar.valueChanged.connect(self.valueChanged.emit)
         self.setLayout(layout)
 
         
-    def __init__(self) -> None:
+    def __init__(self,showFineTune:bool=True,showReverse:bool=True) -> None:
         super().__init__()
         self.setupUi()
-    
+        self.fineTune.setVisible(showFineTune)
+        self.reverse.setVisible(showReverse)
     
     def setReverse(self,reverse:bool):
         self.reverseFlag=reverse
@@ -60,9 +79,59 @@ class Channel(QWidget):
         self.progressBar.setValue(self.channelValue+x)
 
 
+    
+class ChannelGroup(QWidget):
+
+
+    channelValueChanged=pyqtSignal(int,int)
+
+    def setupUi(self):
+        layout=QVBoxLayout()
+        self.channels=[Channel(showFineTune=self.showFineTune,showReverse=self.showReverse) for _ in range(self.channelCount)]
+        for idx,channel in enumerate[Channel](self.channels):
+            channel.setLabel(f"{self.prefix}{idx+1}")
+            channel.setFineTune(self.fineTunes[idx] if idx<len(self.fineTunes) else 0)
+            channel.valueChanged.connect(lambda value: self.channelValueChanged.emit(idx,value))
+            layout.addWidget(channel)
+        self.setLayout(layout)
+
+    def __init__(self,channelCount:int=10,fineTunes:list[int]=[0]*10,prefix:str="通道",showFineTune:bool=True,showReverse:bool=True) -> None:
+        super().__init__()
+        self.channelCount=channelCount
+        self.fineTunes=fineTunes
+        self.prefix=prefix
+        self.showFineTune=showFineTune
+        self.showReverse=showReverse
+        self.setupUi()
+
+    def getValues(self) -> list[int]:
+        return [channel.getValue() for channel in self.channels]
+    
+
+    def setValue(self,idx:int,value:int):
+        if idx>=self.channelCount:
+            return
+        self.channels[idx].setValue(value)
+
+
+    def setValues(self,values:list[int]):
+        for idx,value in enumerate[Any](values):
+            if idx>=self.channelCount:
+                break
+            self.setValue(idx,value)
+
+
 class Detector(QWidget):
     signal=pyqtSignal(list) # (channel,value)
     loading=pyqtSignal(str)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setupUi()
+        self.deviceMap:dict[Any, Any]=dict[Any, Any]()      
+        self.joystick=JoyStick()
+
+
     def setupUi(self):
         layout=QHBoxLayout()
         self.devices=ComboBox(self)
@@ -113,12 +182,7 @@ class Detector(QWidget):
         if not hasattr(self,"joystick"):
             self.joystick.init()
     
-    def __init__(self) -> None:
-        super().__init__()
-        self.setupUi()
-        self.deviceMap=dict()      
-        self.joystick=JoyStick()
-       
+
 
 
 class Controller(ScrollArea):
@@ -133,13 +197,8 @@ class Controller(ScrollArea):
         layout=QVBoxLayout()
         self.detector=Detector()
         layout.addWidget(self.detector)
-        self.channels=[Channel() for _ in range(self.channelCount)]
-        for idx,channel in enumerate(self.channels):
-            channel.setLabel(f"Channel{idx+1}")
-            logging.info(f"channel {idx}")
-            logging.info(f"setting.channels {self.setting.channels}")
-            channel.setFineTune(self.setting.channels[idx] if idx<len(self.setting.channels) else 0)
-            layout.addWidget(channel)
+        self.channelGroup=ChannelGroup(channelCount=self.setting.channel_count,fineTunes=self.setting.channels)
+        layout.addWidget(self.channelGroup)
         self.widget().setLayout(layout)
         self.enableTransparentBackground()
 
@@ -156,18 +215,15 @@ class Controller(ScrollArea):
         self.detector.signal.connect(self.setChannelValue)
 
     def getChannelValues(self):
-        return [channel.getValue() for channel in self.channels]
+        return self.channelGroup.getValues()
 
 
     def __emit_control_message(self):
         channelValues=self.getChannelValues()
         self.controlMessage.emit(channelValues)
     # 更新通道值 
-    def setChannelValue(self,values:list):
-        for idx,value in enumerate(values):
-            if idx>=self.channelCount:
-                break
-            self.channels[idx].setValue(value)
+    def setChannelValue(self,values:list[int]):
+        self.channelGroup.setValues(values)
         self.__emit_control_message()
     
     def close(self):

@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import *
 import numpy as np
 from qfluentwidgets import PushButton
 
+from controller import ChannelGroup
 from pkg.model import Setting
 from protocol.highway_pb2 import Device, DeviceParam, Video
 from view.imu import IMUWidget
@@ -36,8 +37,7 @@ class Monitor(QWidget):
  
         
         self.display =VideoPanel()
-        self.display.fps_collected.connect(self.statusBar.update_fps)
-        
+        self.display.param_changed.connect(self.param_changed)
   
         self.waveform = WaveformWidget()
         
@@ -65,12 +65,15 @@ class Monitor(QWidget):
         
         
         self.controlPanel=ControlPanel()
+
+        self.channelGroup=ChannelGroup(self.setting.channel_count,self.setting.channels,showFineTune=False,showReverse=False)
         
         main_layout.addWidget(self.statusBar,0,0,1,2)
         main_layout.addWidget(self.display,1,0)
         main_layout.addWidget(self.waveform,2,0)
         main_layout.addLayout(buttonLayout,3,0)
-        main_layout.addWidget(self.controlPanel,1,1,3,1)
+        main_layout.addWidget(self.controlPanel,1,1,2,1)
+        main_layout.addWidget(self.channelGroup,3,1,1,1)
         self.setLayout(main_layout)
         
         self.__frame = None
