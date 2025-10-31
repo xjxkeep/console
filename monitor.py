@@ -97,8 +97,9 @@ class Monitor(QWidget):
         
     
     def update_device_param(self,data:DeviceParam):
-        logging.info(data)
+        # logging.info(data)
         # self.imu.update_imu_data(data.imu_param)
+        pass
 
     def update_wave_form(self,value:np.ndarray):
         self.waveform.set_data(value)

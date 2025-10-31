@@ -5,7 +5,7 @@ import os
 import sys
 
 from PyQt5.QtCore import QThread, Qt, pyqtSignal
-from PyQt5.QtGui import QCloseEvent
+from PyQt5.QtGui import QCloseEvent, QPixmap
 from PyQt5.QtWidgets import QApplication, QSplashScreen, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel
 from qfluentwidgets.common import FluentIcon
@@ -125,12 +125,13 @@ class MainWindow(FluentWindow):
             self.debug_monitor.setPixmap(pixmap)
     
     def update_monitor(self):
-        pixmap=None
-        if pixmap is None and self.quic_client.h264_decoder_worker:
-            pixmap=self.quic_client.h264_decoder_worker.get_frame()
-        if pixmap is None and self.quic_client.h265_decoder_worker:
-            pixmap=self.quic_client.h265_decoder_worker.get_frame()
-        if pixmap is None: return
+        qimg=None
+        if qimg is None and self.quic_client.h264_decoder_worker:
+            qimg=self.quic_client.h264_decoder_worker.get_frame()
+        if qimg is None and self.quic_client.h265_decoder_worker:
+            qimg=self.quic_client.h265_decoder_worker.get_frame()
+        if qimg is None: return
+        pixmap=QPixmap.fromImage(qimg)
         self.monitor.setPixmap(pixmap)
     def _handle_hid_response(self,response:HIDBody):
         logging.info(f"hid response {response}")

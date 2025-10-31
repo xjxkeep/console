@@ -471,7 +471,7 @@ class HighwayQuicClient(QObject):
             try:
                 message = await asyncio.wait_for(self.receive_message(reader), timeout=1.0)
                 device_param = DeviceParam.FromString(message)
-                logging.info(f"receive device param message {device_param}")
+                logging.debug(f"receive device param message {device_param}")
                 self.device_param_ready.emit(device_param)
             except asyncio.TimeoutError:
                 # 超时是正常的，继续循环检查running状态

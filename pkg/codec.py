@@ -17,7 +17,7 @@ import numpy as np
 
 from pkg.buffer import BufferStream
 from pkg.metric import *
-av.logging.set_level(av.logging.DEBUG)
+# av.logging.set_level(av.logging.DEBUG)
 
 class VideoDecoder(QObject):
     frame_decoded = pyqtSignal()
@@ -82,13 +82,12 @@ class VideoDecoder(QObject):
                     # logging.info("decode frame",self.frame_count,"time:",time.time())
                     self.frame_count+=1
                     DECODE_FRAME_COUNT.inc()
-                    image=frame.to_ndarray(format='rgb24')
+                    # 明确指定颜色范围和格式转换，避免deprecated像素格式警告
+                    image=frame.to_ndarray(format='rgb24', width=frame.width, height=frame.height)
                     height, width, _ = image.shape
                     bytes_per_line = 3 * width
                     q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
-                    # Convert QImage to QPixmap
-                    pixmap = QPixmap.fromImage(q_img)
-                    self.frames.append(pixmap)
+                    self.frames.append(q_img.copy())
                     DECODER_FIFO_SIZE.inc()
                     self.frame_decoded.emit()
                     if not self.running:
