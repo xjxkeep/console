@@ -28,6 +28,7 @@ class VideoDecoder(QObject):
             "H.265":"hevc",
             "h264":"h264",
             "hevc":"hevc",
+            "h265":"hevc",
         }
         self.stream=BufferStream()
         self.frames=deque[Any]()
