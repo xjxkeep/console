@@ -33,7 +33,7 @@ from protocol.highway_pb2 import (
     VideoFeedback,
     ClockSynchronizationParam,
 )
-
+import threading
 
 
 class HighwayClientProtocol(QuicConnectionProtocol,QObject):
@@ -45,13 +45,15 @@ class HighwayClientProtocol(QuicConnectionProtocol,QObject):
         self.codec=FECCodec(block_size=1024,timeout_seconds=5.0,max_buffer_size=1000)
         self.codec.data_decoded.connect(self.datagram_data_received.emit)
         self._connection_lost = False   
+        self._lock = threading.Lock()
     def quic_event_received(self, event: QuicEvent) -> None:
         if isinstance(event, ConnectionTerminated):
             self._connection_lost = True
             self.quic_connection_lost.emit()
         elif isinstance(event, DatagramFrameReceived):
-            logging.debug(f"datagram frame received len {len(event.data)}")
-            self.codec.add_package(event.data)
+            with self._lock:
+                logging.debug(f"datagram frame received len {len(event.data)}")
+                self.codec.add_package(event.data)
         return super().quic_event_received(event)
     
     def send_datagram(self,data:bytes):

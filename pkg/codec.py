@@ -31,7 +31,7 @@ class VideoDecoder(QObject):
             "h265":"hevc",
         }
         self.stream=BufferStream()
-        self.frames=deque[Any]()
+        self.frames=Queue[QImage]()
         self.format=format
         self.has_data = False
         self.running = True
@@ -55,9 +55,7 @@ class VideoDecoder(QObject):
 
     def get_frame(self):
         DECODER_FIFO_SIZE.dec()
-        if len(self.frames)>0:
-            return self.frames.popleft()
-    
+        return self.frames.get()
 
     def frame_decode_task(self):
         if not self.running:
@@ -87,7 +85,7 @@ class VideoDecoder(QObject):
                     height, width, _ = image.shape
                     bytes_per_line = 3 * width
                     q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
-                    self.frames.append(q_img.copy())
+                    self.frames.put(q_img.copy())
                     DECODER_FIFO_SIZE.inc()
                     self.frame_decoded.emit()
                     if not self.running:

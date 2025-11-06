@@ -128,8 +128,10 @@ class MainWindow(FluentWindow):
         qimg=None
         if qimg is None and self.quic_client.h264_decoder_worker:
             qimg=self.quic_client.h264_decoder_worker.get_frame()
+            logging.debug(f"h264 decoder worker get frame")
         if qimg is None and self.quic_client.h265_decoder_worker:
             qimg=self.quic_client.h265_decoder_worker.get_frame()
+            logging.debug(f"h265 decoder worker get frame")
         if qimg is None: return
         pixmap=QPixmap.fromImage(qimg)
         self.monitor.setPixmap(pixmap)
