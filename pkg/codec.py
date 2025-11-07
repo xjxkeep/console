@@ -167,7 +167,7 @@ class H264Encoder(QObject):
             
             # 使用PyAV支持的选项设置
             stream.codec_context.options = {
-                'preset': 'ultrafast',
+                'preset': 'fast',
                 'tune': 'zerolatency',
                 'crf': '23'
             }

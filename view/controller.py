@@ -353,6 +353,7 @@ class ButtonController(QWidget):
 
 
 class ControlPanel(GroupHeaderCardWidget):
+    joystick_changed=pyqtSignal(float,float)
     def __init__(self):
         super().__init__()
         self.initUI()
@@ -404,7 +405,7 @@ class ControlPanel(GroupHeaderCardWidget):
     def on_joystick_changed(self, x, y):
         """摇杆位置变化回调"""
         self.value_label.setText(f"X: {x:.2f}  Y: {y:.2f}")
-        
+        self.joystick_changed.emit(x,y)
         # 这里可以添加你的控制逻辑
         # 例如：发送控制命令、更新机器人位置等
         if abs(x) > 0.1 or abs(y) > 0.1:  # 只有移动超过阈值才处理
