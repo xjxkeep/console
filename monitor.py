@@ -3,7 +3,7 @@ import logging
 
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import *
 import numpy as np
 from qfluentwidgets import PushButton
@@ -116,8 +116,8 @@ class Monitor(QWidget):
         self.statusBar.update_latency(value)
         
     
-    def setPixmap(self, pixmap:QPixmap):
-        self.display.setPixmap(pixmap)
+    def setQImage(self, qimage:QImage):
+        self.display.setQImage(qimage)
 
 
 

@@ -1,8 +1,9 @@
 import logging
 from PyQt5 import QtGui
+from PyQt5 import QtCore
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QLabel, QVBoxLayout
+from PyQt5.QtWidgets import QLabel, QVBoxLayout, QWidget
 from PyQt5.QtWidgets import QSizePolicy
 from qfluentwidgets import GroupHeaderCardWidget,TransparentPushButton,FluentIcon,ComboBox
 
@@ -14,7 +15,7 @@ class VideoPanel(GroupHeaderCardWidget):
         self.initUI()
     def initUI(self):
         self.setTitle("视频监控")
-        self.videoPlayer=VideoPlayer()
+        self.videoPlayer=FastVideoPlayer()
         self.fps=TransparentPushButton(FluentIcon.VIDEO.icon(),"30 fps")
         self.resolution=ComboBox()
         self.resolution.addItems(["清晰度: 高清","清晰度: 标清","清晰度: 流畅"])
@@ -35,8 +36,8 @@ class VideoPanel(GroupHeaderCardWidget):
         self.headerLayout.addWidget(self.resolution)
         self.headerLayout.addWidget(self.video_format)
         self.headerLayout.addWidget(self.bABR)
-    def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
-        self.videoPlayer.setPixmap(pixmap)
+    def setQImage(self, qimage: QtGui.QImage) -> None:
+        self.videoPlayer.setImage(qimage)
     
     def __handel_setting_changed(self):
         self.param_changed.emit({
@@ -80,3 +81,72 @@ class VideoPlayer(QLabel):
     def update_fps(self):
         self.fps_collected.emit(self.fps)
         self.fps=0
+        
+        
+        
+class FastVideoPlayer(QWidget):
+    fps_collected=pyqtSignal(int)
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.fps=0
+        self.current_image = None  # 保存当前要显示的图像
+        self.timer=QTimer(self)
+        self.timer.setInterval(1000)
+        self.timer.timeout.connect(self.update_fps)
+        self.timer.start()
+        self.setupUi()
+    def setupUi(self):
+        # self.setFixedSize(200,200)
+        self.setObjectName("Player")
+        self.setSizePolicy(QSizePolicy.Expanding,QSizePolicy.Expanding)
+        self.setStyleSheet("background-color: rgb(0,0,0);color: rgb(255,255,255);")
+    
+    def paintEvent(self, event):
+        """重写 paintEvent，在这里绘制图像"""
+        if self.current_image is not None:
+            painter = QtGui.QPainter(self)
+            rect=self.rect()
+            # 调整 rect 使得图像长宽比例不变的情况下 图像居中
+            img_width = self.current_image.width()
+            img_height = self.current_image.height()
+            wnd_width = rect.width()
+            wnd_height = rect.height()
+
+            if img_width > 0 and img_height > 0:
+                img_ratio = img_width / img_height
+                wnd_ratio = wnd_width / wnd_height
+
+                if wnd_ratio > img_ratio:
+                    # 限制高，算宽
+                    scaled_height = wnd_height
+                    scaled_width = int(img_ratio * scaled_height)
+                else:
+                    # 限制宽，算高
+                    scaled_width = wnd_width
+                    scaled_height = int(scaled_width / img_ratio)
+
+                x = rect.x() + (wnd_width - scaled_width) // 2
+                y = rect.y() + (wnd_height - scaled_height) // 2
+
+                target_rect = QtCore.QRect(x, y, scaled_width, scaled_height)
+                painter.drawImage(target_rect, self.current_image)
+                painter.end()
+                return
+            painter.drawImage(self.rect(), self.current_image)
+            painter.end()
+        else:
+            super().paintEvent(event)
+   
+    def setImage(self,image:QtGui.QImage)->None:
+        """设置要显示的图像"""
+        self.fps+=1
+        if image is not None:
+            # 缩放图像并保存
+            self.current_image=image
+            # 触发重绘
+            self.update()
+        
+    def update_fps(self):
+        self.fps_collected.emit(self.fps)
+        self.fps=0
+    

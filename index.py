@@ -89,6 +89,8 @@ class MainWindow(FluentWindow):
         
         
         self.quic_client.video_encoder_worker.frame_collected.connect(self.update_debug_monitor)
+        self.quic_client.connected.connect(self.monitor.statusBar.handle_server_connected)
+        self.quic_client.connection_error.connect(self.monitor.statusBar.handle_server_disconnected)
 
         
         self.mqtt_client=MQTTClient(self.setting)
@@ -133,8 +135,7 @@ class MainWindow(FluentWindow):
             qimg=self.quic_client.h265_decoder_worker.get_frame()
             logging.debug(f"h265 decoder worker get frame")
         if qimg is None: return
-        pixmap=QPixmap.fromImage(qimg)
-        self.monitor.setPixmap(pixmap)
+        self.monitor.setQImage(qimg)
     def _handle_hid_response(self,response:HIDBody):
         logging.info(f"hid response {response}")
         try:

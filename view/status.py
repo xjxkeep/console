@@ -78,3 +78,12 @@ class StatusBar(QWidget):
     def __init__(self):
         super().__init__()
         self.setupUi()
+
+
+    def handle_server_connected(self):
+        self.connect_status.setText("服务器状态: 已连接")
+        self.connect_status.setIcon(FluentIcon.CLOUD.icon(color=QColor("green")))
+
+    def handle_server_disconnected(self):
+        self.connect_status.setText("服务器状态: 未连接")
+        self.connect_status.setIcon(FluentIcon.CLOUD.icon(color=QColor("red")))
