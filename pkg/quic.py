@@ -45,15 +45,13 @@ class HighwayClientProtocol(QuicConnectionProtocol,QObject):
         self.codec=FECCodec(block_size=1024,timeout_seconds=5.0,max_buffer_size=1000)
         self.codec.data_decoded.connect(self.datagram_data_received.emit)
         self._connection_lost = False   
-        self._lock = threading.Lock()
     def quic_event_received(self, event: QuicEvent) -> None:
         if isinstance(event, ConnectionTerminated):
             self._connection_lost = True
             self.quic_connection_lost.emit()
         elif isinstance(event, DatagramFrameReceived):
-            with self._lock:
-                logging.debug(f"datagram frame received len {len(event.data)}")
-                self.codec.add_package(event.data)
+            logging.debug(f"datagram frame received len {len(event.data)}")
+            self.codec.add_package(event.data)
         return super().quic_event_received(event)
     
     def send_datagram(self,data:bytes):
@@ -76,9 +74,8 @@ class HighwayClientProtocol(QuicConnectionProtocol,QObject):
             return False
 
     def receive_datagram(self):
-        if len(self.codec.data_buffer)>0:
-            data=self.codec.data_buffer.popleft()
-            return data
+        data=self.codec.data_buffer.get()
+        return data
     
     def connection_lost(self, exc):
         """重写连接丢失处理方法"""
