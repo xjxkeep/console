@@ -21,16 +21,20 @@ except Exception as e:
     logging.warning(f"加载日志级别设置失败: {e}")
 
 
-app=QApplication(sys.argv)
-splash = SplashScreen()
+try:
+    app=QApplication(sys.argv)
+    splash = SplashScreen()
 
-splash.show()
-logging.info("loading")
-from index import MainWindow
-logging.info("start prometheus http server on port 8000")
-app.processEvents()
-m=MainWindow()
-splash.loading_complete()
-splash.finish(m)
-m.show()
-app.exec()
+    splash.show()
+    logging.info("loading")
+    from index import MainWindow
+    logging.info("start prometheus http server on port 8000")
+    app.processEvents()
+    m=MainWindow()
+    splash.loading_complete()
+    splash.finish(m)
+    m.show()
+    app.exec()
+except Exception as e:
+    logging.error(f"main error {e}")
+    sys.exit(1)
