@@ -38,7 +38,7 @@ jobs:
 
       - name: Package Application with PyInstaller
         run: |
-          pyinstaller -n console main.py --hidden-import uuid
+          pyinstaller -n console main.py --hidden-import uuid --debug=all
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

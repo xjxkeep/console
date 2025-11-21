@@ -19,7 +19,6 @@ import numpy as np
 from pkg.audio import AudioPlayer, AudioRecorder
 from pkg.codec import VideoDecoder, H264Encoder
 from pkg.fec import FECCodec
-from pkg.metric import *
 from pkg.model import Setting
 from pkg.crc import calculate_uint16_crc8
 from protocol.highway_pb2 import (
@@ -211,7 +210,6 @@ class HighwayQuicClient(QObject):
         writer.write(data)
         if flush:
             await writer.drain()
-        NETWORK_UPLOAD_BYTES.inc(float(len(data)))
         self.upload_bytes+=len(data)
         
     async def receive_message(self,reader:asyncio.StreamReader):
@@ -222,7 +220,6 @@ class HighwayQuicClient(QObject):
         while True:
             b = await reader.readexactly(1)
             self.download_bytes+=1
-            NETWORK_DOWNLOAD_BYTES.inc(float(1))
             if b[0] == 0xff:
                 header[0] = b[0]
                 # 读取剩余3个字节
@@ -231,7 +228,6 @@ class HighwayQuicClient(QObject):
                     remaining = await reader.readexactly(remain_size)
                     header[4-remain_size:] = remaining
                     self.download_bytes+=remain_size
-                    NETWORK_DOWNLOAD_BYTES.inc(float(remain_size))
                     
                     # 获取长度并验证CRC
                     length = (header[2]&0xff | (header[3]&0xff)<<8)
@@ -242,7 +238,6 @@ class HighwayQuicClient(QObject):
                         # 读取消息体
                         data = await reader.readexactly(length)
                         self.download_bytes+=length
-                        NETWORK_DOWNLOAD_BYTES.inc(float(length))
                         return data
                     # [ff,a,ff,b]
                     # [ff,b]   i=2  
@@ -831,24 +826,25 @@ class HighwayQuicClient(QObject):
         
     def __parse_video_data(self,data:bytes):
         
+        try:
+            video = Video.FromString(data)
+            if video.code_type == Video.CodeType.H265:
+                self.h265_decoder_worker.write(video.raw)
+            else:
+                self.h264_decoder_worker.write(video.raw)
+            if self.feedback_writer and self.loop:
+                asyncio.create_task(self.send_message(self.feedback_writer, VideoFeedback(received_frame_index=video.frame_id),flush=False))
         
-        video = Video.FromString(data)
-        if video.code_type == Video.CodeType.H265:
-            self.h265_decoder_worker.write(video.raw)
-        else:
-            self.h264_decoder_worker.write(video.raw)
-        if self.feedback_writer and self.loop:
-            asyncio.create_task(self.send_message(self.feedback_writer, VideoFeedback(received_frame_index=video.frame_id)))
-       
 
-        # FIXME 如果传输的数据不是一个完整的NALU的话 会花屏
-        # if video.slice_id == video.slice_count:
-        #     logging.debug("send eof nal")
-        #     self.h264_decoder_worker.write(b"\x00\x00\x00\x01\x09\x00")
-        self.latency_sum+=int(time.time()*1000)-video.timestamp
-        # logging.info("parse datagram frame id ",video.frame_id," latency ",int(time.time()*1000)-video.timestamp,"size",len(video.raw))
-        PROTOBUF_LATENCY.labels(type="video").observe(int(time.time()*1000)-video.timestamp)
-        self.latency_count+=1
+            # FIXME 如果传输的数据不是一个完整的NALU的话 会花屏
+            # if video.slice_id == video.slice_count:
+            #     logging.debug("send eof nal")
+            #     self.h264_decoder_worker.write(b"\x00\x00\x00\x01\x09\x00")
+            self.latency_sum+=int(time.time()*1000)-video.timestamp
+            # logging.info("parse datagram frame id ",video.frame_id," latency ",int(time.time()*1000)-video.timestamp,"size",len(video.raw))
+            self.latency_count+=1
+        except Exception as e:
+            logging.error(f"__parse_video_data error {e}")
         
     
     async def __read_video_stream(self,reader:asyncio.StreamReader):

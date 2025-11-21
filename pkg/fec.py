@@ -162,32 +162,34 @@ class FECCodec(QObject):
             try:
                 self.block_count+=1
                 packet = Packet.from_raw(data)
+            
+            
+                self.packet_map[packet.data_id].append(packet)
+                # TODO 如果没有达到K个包 尽量还原数据给解码器  添加超时机制 避免内存泄漏
+                if len(self.packet_map[packet.data_id]) == packet.K:
+                    packets=self.packet_map[packet.data_id]
+                    decoder = Decoder(packet.K, packet.K + packet.M)
+                    blocks=[p.payload for p in packets]
+                    shard_idx=[p.block_index for p in packets]
+                    logging.debug(f"decoding data_id {packet.data_id} block_indexs {shard_idx}")
+                    decoded_data = decoder.decode(blocks, shard_idx,0)
+                    logging.debug(f"decoded data_id {packet.data_id} decoded_data {len(decoded_data)} bytes")
+                        
+                    self.data_buffer.put(decoded_data)
+                    self.data_decoded.emit()
+                    self.frame_count+=1
+                    
+                    
+                    self.frame_latest_id=packet.data_id
+                    # 删除所有小于data_id的map数据
+                    keys_to_delete = [k for k in self.packet_map.keys() if k < packet.data_id]
+                    for k in keys_to_delete:
+                        del self.packet_map[k]
+                        
             except Exception as e:
                 logging.error(f"add package error {e}")
                 self.block_break_count+=1
                 return
-            
-            self.packet_map[packet.data_id].append(packet)
-            # TODO 如果没有达到K个包 尽量还原数据给解码器  添加超时机制 避免内存泄漏
-            if len(self.packet_map[packet.data_id]) == packet.K:
-                packets=self.packet_map[packet.data_id]
-                decoder = Decoder(packet.K, packet.K + packet.M)
-                blocks=[p.payload for p in packets]
-                shard_idx=[p.block_index for p in packets]
-                logging.debug(f"decoding data_id {packet.data_id} block_indexs {shard_idx}")
-                decoded_data = decoder.decode(blocks, shard_idx,0)
-                logging.debug(f"decoded data_id {packet.data_id} decoded_data {len(decoded_data)} bytes")
-                    
-                self.data_buffer.put(decoded_data)
-                self.data_decoded.emit()
-                self.frame_count+=1
-                
-                
-                self.frame_latest_id=packet.data_id
-                # 删除所有小于data_id的map数据
-                keys_to_delete = [k for k in self.packet_map.keys() if k < packet.data_id]
-                for k in keys_to_delete:
-                    del self.packet_map[k]
 
         
     # def collect_metrics(self):
