@@ -128,7 +128,7 @@ class HighwayQuicClient(QObject):
             is_client=True,
             max_datagram_frame_size=65536,  # 启用 datagram 支持，设置最大大小
             max_datagram_size=1200,  # 单个 datagram 最大大小
-            idle_timeout=2
+            idle_timeout=30
         )
 
         if self.setting.insecure:
@@ -409,14 +409,17 @@ class HighwayQuicClient(QObject):
                     # Keep connection alive
                     while self.running:
                         try:
-                            # Check if client is still connected with shorter timeout
-                            await asyncio.wait_for(client.ping(), timeout=0.5)
+                            # 优化: 移除 ping()，依赖 idle_timeout/datagrams/streams keep-alive
+                            # 频繁 ping 在高负载下可能导致不必要的开销
                             await asyncio.sleep(1.0)
-                        except asyncio.TimeoutError:
-                            logging.info("Ping timeout, connection may be lost")
-                            break
+                            
+                            # 增加对 client 内部状态的检查，确保 aioquic 仍认为连接有效
+                            if self.client._quic.is_closing() or self.client._quic.terminal_error:
+                                logging.warning("QUIC connection detected as closing internally.")
+                                break
+                                
                         except Exception as e:
-                            logging.info(f"Ping error: {e}")
+                            logging.info(f"Keep-alive check error: {e}")
                             break
                     
                         
