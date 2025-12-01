@@ -686,7 +686,7 @@ class HighwayQuicClient(QObject):
                 ntp_param = ClockSynchronizationParam.FromString(message)
                 self.clock_offset=round(((ntp_param.req_rx_ms-ntp_param.req_tx_ms)+(ntp_param.resp_tx_ms-int(time.time()*1000)))/2)
                 logging.debug(f"receive ntp param message {ntp_param} clock_offset {self.clock_offset}")
-                await self.send_message(writer=self.ntp_writer,message=ntp_param)
+                await self.send_message(writer=self.ntp_writer,message=ntp_param,flush=False)
             except asyncio.TimeoutError:
                 continue
             except Exception as e:

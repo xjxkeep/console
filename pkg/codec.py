@@ -15,8 +15,7 @@ import av
 import cv2
 import numpy as np
 
-from pkg.buffer import BufferStream
-from pkg.metric import *
+from pkg.buffer import BytesBufferStream,BufferStream
 # av.logging.set_level(av.logging.DEBUG)
 
 class VideoDecoder(QObject):
@@ -30,7 +29,7 @@ class VideoDecoder(QObject):
             "hevc":"hevc",
             "h265":"hevc",
         }
-        self.stream=BufferStream()
+        self.stream=BytesBufferStream()
         self.frames=Queue[QImage]()
         self.format=format
         self.has_data = False
@@ -45,16 +44,9 @@ class VideoDecoder(QObject):
     def write(self, data):
         if not data or len(data)==0 :
             return
-        # if data.startswith(b"\x00\x00\x00\x01"):
-        #     logging.info("get decoder v1 nal",data[4]&0x1f)
-        # elif data.startswith(b"\x00\x00\x01"):
-        #     logging.info("get decoder v2 nal",data[3]&0x1f)
-        # else:
-        #     logging.info("get decoder illegal nal",len(data))
         self.stream.write(data)
 
     def get_frame(self):
-        DECODER_FIFO_SIZE.dec()
         return self.frames.get()
 
     def frame_decode_task(self):
@@ -77,16 +69,14 @@ class VideoDecoder(QObject):
         try:
             while self.running:
                 for frame in self.container.decode(video=0):
-                    # logging.info("decode frame",self.frame_count,"time:",time.time())
+                    
                     self.frame_count+=1
-                    DECODE_FRAME_COUNT.inc()
                     # 明确指定颜色范围和格式转换，避免deprecated像素格式警告
                     image=frame.to_ndarray(format='rgb24', width=frame.width, height=frame.height)
                     height, width, _ = image.shape
                     bytes_per_line = 3 * width
                     q_img = QImage(image.data, width, height, bytes_per_line, QImage.Format_RGB888)
                     self.frames.put(q_img.copy())
-                    DECODER_FIFO_SIZE.inc()
                     self.frame_decoded.emit()
                     if not self.running:
                         logging.info("video decode thread exit")
