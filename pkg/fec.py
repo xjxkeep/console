@@ -67,145 +67,200 @@ class Packet:
         return struct.pack(self.HEADER_FORMAT, self.data_id,self.block_index, self.K, self.M, self.crc) + self.payload
 
   
-
 class FECCodec(QObject):
-     
-    # 信号定义
-    data_decoded = pyqtSignal()  # 数据解码成功
-    
+    data_decoded = pyqtSignal()
+
     def __init__(self, block_size=1200, timeout_seconds=5.0, max_buffer_size=1000):
-        """
-        初始化 FEC 编解码器
-        
-        Args:
-            block_size: 数据块大小
-            timeout_seconds: 数据包超时时间（秒）
-            max_buffer_size: 最大缓冲区大小（防止内存泄漏）
-        """
         super().__init__()
         
-        # 配置参数
         self.block_size = block_size
         self.timeout_seconds = timeout_seconds
         self.max_buffer_size = max_buffer_size
         
-        # 数据管理
         self.data_id_counter = 0
         
-        self.packet_map=defaultdict(list)
+        # 优化: 使用字典存储接收到的包。键是 data_id
+        # 值为一个包含 (payload, block_index) 的列表
+        self.received_blocks = defaultdict(list)
+        # 优化: 记录已成功解码的 data_id，避免重复解码
+        self.decoded_ids = set() 
         
-        self.data_buffer= Queue()
+        self.data_buffer = Queue()
         self._lock = threading.Lock()
-        self.running=True
+        self.running = True
         
-        self.block_count=0
-        self.block_loss_count=0
-        self.block_break_count=0
+        # 统计信息
+        self.block_total_received = 0
+        self.block_crc_errors = 0
+        self.frame_decoded_count = 0
+        self.frame_latest_id = -1 # 使用 -1 表示未收到
+        self.frame_lost_count = 0 # 统计因超时而被清理的帧数量
         
-        self.frame_count=0
-        self.frame_loss_count=0
-        self.frame_latest_id=0
-        
-        
-     
+        # 优化: QTimer 用于定时清理过期数据包，防止内存泄漏
+        self.cleanup_timer = QTimer(self)
+        self.cleanup_timer.timeout.connect(self._cleanup_expired_blocks)
+        self.cleanup_timer.start(1000) # 每隔 1 秒清理一次
 
-    
+    def close(self):
+        self.running = False
+        self.cleanup_timer.stop()
+        self.data_buffer.put(None)
+        with self._lock:
+            self.received_blocks.clear()
+            self.decoded_ids.clear()
+        logging.info("FECCodec closed.")
+
+    # 保持 encode 接口不变，因为 zfec 的编码逻辑是直接计算 K 和 M 的
     def encode(self, data: bytes):
-        """
-        编码数据为 FEC 数据包
-        
-        Args:
-            data: 原始数据
-            
-        Returns:
-            list: 编码后的数据包列表
-        """
-        
+        # ... (encode 方法保持不变) ...
         if len(data) == 0:
             raise ValueError("输入数据不能为空")
         
         try:
-            # 生成唯一的数据ID
             data_id = self.data_id_counter
             self.data_id_counter = (self.data_id_counter + 1) % (2**32)
             
-            # 计算 FEC 参数
-            K = max(1, (len(data) + self.block_size - 1) // self.block_size)  # 向上取整
-            M = 2  # 冗余块数
+            K = max(1, (len(data) + self.block_size - 1) // self.block_size)
+            M = 2
             
-            # 创建编码器
             encoder = Encoder(K, K + M)
             encoded_data = encoder.encode(data)
             
             packets = []
-            for i, data in enumerate(encoded_data):
-                # 封装头部
-                packet = Packet(data_id, K, i, M, data)
+            for i, data_chunk in enumerate(encoded_data):
+                packet = Packet(data_id, K, i, M, data_chunk)
                 packets.append(packet.raw())
             
-                logging.debug(f"Encoded data_id={data_id} block_index={i} : {len(data)} bytes -> {len(packets)} packets (K={K}, M={M})")
+            logging.debug(f"Encoded data_id={data_id} K={K}, M={M}")
             return packets
             
         except Exception as e:
             logging.error(f"编码失败: {e}")
             raise
-    
+
     def add_package(self, data: bytes):
         """
-        添加接收到的数据包
-        
-        Args:
-            data: 接收到的数据包（包含头部）
+        添加接收到的数据包。
+        - 立即尝试 FEC 解码 (只需 K 个包，不一定必须是原始包)。
+        - 在成功解码后清理旧的块。
         """
         with self._lock:
-            # 解析数据包
             try:
-                self.block_count+=1
+                self.block_total_received += 1
                 packet = Packet.from_raw(data)
+            except ValueError as e:
+                logging.warning(f"CRC 或头部错误: {e}")
+                self.block_crc_errors += 1
+                return
             
+            data_id = packet.data_id
+            K = packet.K
+            M = packet.M
             
-                self.packet_map[packet.data_id].append(packet)
-                # TODO 如果没有达到K个包 尽量还原数据给解码器  添加超时机制 避免内存泄漏
-                if len(self.packet_map[packet.data_id]) == packet.K:
-                    packets=self.packet_map[packet.data_id]
-                    decoder = Decoder(packet.K, packet.K + packet.M)
-                    blocks=[p.payload for p in packets]
-                    shard_idx=[p.block_index for p in packets]
-                    logging.debug(f"decoding data_id {packet.data_id} block_indexs {shard_idx}")
-                    decoded_data = decoder.decode(blocks, shard_idx,0)
-                    logging.debug(f"decoded data_id {packet.data_id} decoded_data {len(decoded_data)} bytes")
-                        
-                    self.data_buffer.put(decoded_data)
-                    self.data_decoded.emit()
-                    self.frame_count+=1
-                    
-                    
-                    self.frame_latest_id=packet.data_id
-                    # 删除所有小于data_id的map数据
-                    keys_to_delete = [k for k in self.packet_map.keys() if k < packet.data_id]
-                    for k in keys_to_delete:
-                        del self.packet_map[k]
-                        
-            except Exception as e:
-                logging.error(f"add package error {e}")
-                self.block_break_count+=1
+            # 1. 检查是否已经解码
+            if data_id in self.decoded_ids or data_id < self.frame_latest_id:
+                logging.debug(f"Block {data_id} already decoded or too old, ignoring.")
                 return
 
+            # 2. 检查是否已存在，避免重复添加（可能因为网络重传）
+            is_new = True
+            for _, index, _ in self.received_blocks[data_id]:
+                if index == packet.block_index:
+                    is_new = False
+                    break
+            
+            if is_new:
+                # 存储数据: (payload, block_index, timestamp)
+                self.received_blocks[data_id].append((packet.payload, packet.block_index, packet.last_updated))
+            
+            current_count = len(self.received_blocks[data_id])
+            
+            # 3. 尝试解码: 收到 K 个包就尝试解码 (不需要等到 K 个原始包)
+            if current_count >= K:
+                
+                # 避免重复解码
+                if data_id in self.decoded_ids:
+                    return
+
+                try:
+                    # 准备解码数据
+                    # [ (payload, block_index, timestamp), ... ]
+                    blocks_info = self.received_blocks[data_id]
+                    blocks = [info[0] for info in blocks_info]
+                    shard_indices = [info[1] for info in blocks_info]
+                    
+                    decoder = Decoder(K, K + M)
+                    
+                    # 核心优化: zfec.decode 可以用 K 个任意块进行恢复
+                    decoded_data = decoder.decode(blocks, shard_indices, original_data_size=0)
+                    
+                    # 4. 解码成功处理
+                    self.data_buffer.put(decoded_data)
+                    self.data_decoded.emit()
+                    self.frame_decoded_count += 1
+                    self.decoded_ids.add(data_id)
+                    
+                    # 5. 更新最新 ID 并清理过期/已解码的块
+                    if data_id > self.frame_latest_id:
+                        self.frame_latest_id = data_id
+                        self._delete_old_blocks_locked(data_id)
+                        
+                    logging.debug(f"Successfully decoded data_id {data_id} (K={K})")
+                    
+                except Exception as e:
+                    # 解码失败通常是由于数据损坏或 K 个包不一致（极少数情况）
+                    # 继续等待更多冗余包 (M-K 个)
+                    logging.warning(f"FEC decoding failed for data_id {data_id}: {e}")
+                    # 如果缓冲区没有满，不删除，继续等待
+                    pass
         
-    # def collect_metrics(self):
-    #     while self.running:
-            
-            
-            
+    def _delete_old_blocks_locked(self, latest_id):
+        """
+        在锁保护下删除已解码或过期的数据块。
+        """
+        keys_to_delete = [k for k in self.received_blocks.keys() if k < latest_id]
+        
+        # 限制缓冲区大小
+        if len(self.received_blocks) > self.max_buffer_size:
+             # 找出最小的 ID 进行清理，直到达到 max_buffer_size
+             oldest_ids = sorted(self.received_blocks.keys())[:-self.max_buffer_size]
+             keys_to_delete.extend(oldest_ids)
+             
+        for k in set(keys_to_delete):
+            if k not in self.decoded_ids:
+                 # 统计因超时或清理而丢失的帧
+                 self.frame_lost_count += 1 
+                 logging.warning(f"Frame data_id {k} dropped due to being too old or buffer overflow.")
+            del self.received_blocks[k]
+            self.decoded_ids.discard(k) # 如果是已解码的，也删除记录
+
+    def _cleanup_expired_blocks(self):
+        """
+        QTimer 触发的超时清理函数。
+        """
+        if not self.running:
+            return
+
+        expired_ids = []
+        now = time.time()
+        
+        with self._lock:
+            for data_id, blocks in list(self.received_blocks.items()):
+                # 检查块中是否有任何包已过期
+                if blocks and (now - blocks[0][2]) > self.timeout_seconds:
+                    expired_ids.append(data_id)
+
+            for data_id in expired_ids:
+                if data_id not in self.decoded_ids:
+                    # 统计因超时而被丢弃的帧
+                    self.frame_lost_count += 1
+                    logging.warning(f"Frame data_id {data_id} timed out and was dropped (not decoded).")
+                del self.received_blocks[data_id]
+                self.decoded_ids.discard(data_id)
+        
     def read_data(self):
+        # 保持接口不变
         return self.data_buffer.get()
-  
-    def close(self):
-        self.running=False
-        self.data_buffer.put(None)
-        self.packet_map.clear()
-   
-    
    
 
     

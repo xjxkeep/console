@@ -23,3 +23,4 @@ application
 logs/
 *.log
 .vscode/
+.mypy_cache/
