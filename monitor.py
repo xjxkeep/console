@@ -12,7 +12,7 @@ from view.channel import ChannelGroup,ChannelDisp
 from pkg.model import Setting
 from protocol.highway_pb2 import Device, DeviceParam, Video
 from view.imu import IMUWidget
-from view.status import StatusBar
+from view.status import StatusBar, StatusPanel
 from view.video import VideoPanel
 from view.wave import WaveformWidget
 from view.controller import ControlPanel
@@ -67,7 +67,7 @@ class Monitor(QWidget):
         self.controlPanel=ControlPanel()
 
         # self.channelGroup=ChannelGroup(self.setting.channel_count,self.setting.channels,showFineTune=False,showReverse=False)
-        
+        self.statusPanel=StatusPanel()
         
         hlayout=QHBoxLayout()
         self.channelDisp=ChannelDisp()
@@ -81,6 +81,7 @@ class Monitor(QWidget):
         main_layout.addLayout(hlayout,2,0)
         main_layout.addLayout(buttonLayout,3,0)
         main_layout.addWidget(self.controlPanel,1,1,2,1,Qt.AlignTop)
+        main_layout.addWidget(self.statusPanel,1,2,2,1,Qt.AlignTop)
         # main_layout.addWidget(self.channelGroup,1,2,2,1)
         self.setLayout(main_layout)
         
