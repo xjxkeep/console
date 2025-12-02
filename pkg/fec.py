@@ -189,10 +189,31 @@ class FECCodec(QObject):
                     blocks = [info[0] for info in blocks_info]
                     shard_indices = [info[1] for info in blocks_info]
                     
+                    # 验证参数有效性，防止崩溃
+                    if K <= 0 or K > 255 or M < 0 or M > 255:
+                        logging.error(f"Invalid FEC parameters: K={K}, M={M} for data_id {data_id}")
+                        return
+                    
+                    if len(blocks) < K:
+                        logging.warning(f"Not enough blocks for decoding: got {len(blocks)}, need {K}")
+                        return
+                    
+                    if len(blocks) != len(shard_indices):
+                        logging.error(f"Blocks and indices count mismatch: {len(blocks)} != {len(shard_indices)}")
+                        return
+                    
+                    # 验证索引范围
+                    for idx in shard_indices:
+                        if idx < 0 or idx >= (K + M):
+                            logging.error(f"Invalid shard index: {idx}, must be in [0, {K+M-1}]")
+                            return
+                    
                     decoder = Decoder(K, K + M)
                     
-                    # 核心优化: zfec.decode 可以用 K 个任意块进行恢复
-                    decoded_data = decoder.decode(blocks, shard_indices, original_data_size=0)
+                    # zfec.decode 的正确调用方式: decode(blocks, indices, padlen)
+                    # padlen 是填充长度，由于解码时不知道原始数据长度，使用 0
+                    # 如果原始数据有填充，解码后的数据末尾会有填充字节，但通常不影响使用
+                    decoded_data = decoder.decode(blocks, shard_indices, 0)
                     
                     # 4. 解码成功处理
                     self.data_buffer.put(decoded_data)

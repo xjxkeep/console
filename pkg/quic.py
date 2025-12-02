@@ -413,10 +413,6 @@ class HighwayQuicClient(QObject):
                             # 频繁 ping 在高负载下可能导致不必要的开销
                             await asyncio.sleep(1.0)
                             
-                            # 增加对 client 内部状态的检查，确保 aioquic 仍认为连接有效
-                            if self.client._quic.is_closing() or self.client._quic.terminal_error:
-                                logging.warning("QUIC connection detected as closing internally.")
-                                break
                                 
                         except Exception as e:
                             logging.info(f"Keep-alive check error: {e}")
