@@ -30,7 +30,7 @@ class Monitor(QWidget):
         self.resize(800,600)
         
         # 使用QGridLayout来实现IMU控件在display右下角的布局
-        main_layout = QGridLayout()
+        
         self.statusBar = StatusBar()
         
 
@@ -70,18 +70,17 @@ class Monitor(QWidget):
         self.statusPanel=StatusPanel()
         
         hlayout=QHBoxLayout()
-        self.channelDisp=ChannelDisp()
-        self.channelDisp.setMaximumWidth(300)
-        self.controlPanel.joystick_changed.connect(self.handle_joystick_changed)
+
         self.waveform.setMinimumWidth(200)
         hlayout.addWidget(self.waveform)
-        hlayout.addWidget(self.channelDisp)
+
+        main_layout = QGridLayout()
         main_layout.addWidget(self.statusBar,0,0,1,2)
-        main_layout.addWidget(self.display,1,0)
-        main_layout.addLayout(hlayout,2,0)
+        main_layout.addWidget(self.display,1,0,2,1)
+        # main_layout.addLayout(hlayout,2,0)
         main_layout.addLayout(buttonLayout,3,0)
-        main_layout.addWidget(self.controlPanel,1,1,2,1,Qt.AlignTop)
-        main_layout.addWidget(self.statusPanel,1,2,2,1,Qt.AlignTop)
+        main_layout.addWidget(self.controlPanel,1,1,1,1)
+        main_layout.addWidget(self.statusPanel,1,2,1,1)
         # main_layout.addWidget(self.channelGroup,1,2,2,1)
         self.setLayout(main_layout)
         

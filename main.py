@@ -13,6 +13,7 @@ try:
 
     import json
     import os
+
     if os.path.exists(".setting.json"):
         with open(".setting.json", "r", encoding='utf-8') as f:
             settings = json.load(f)
@@ -25,6 +26,8 @@ try:
     splash.show()
     logging.info("loading")
     from index import MainWindow
+    # from qfluentwidgets import setTheme,Theme
+    # setTheme(Theme.DARK)
     logging.info("start prometheus http server on port 8000")
     app.processEvents()
     m=MainWindow()

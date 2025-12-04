@@ -7,6 +7,8 @@ from PyQt5.QtGui import QPainter, QBrush, QPen, QColor, QFont, QRadialGradient
 from qfluentwidgets import (FluentWindow, SubtitleLabel, PushButton,
                            Theme, setTheme,GroupHeaderCardWidget)
 
+from view.channel import ChannelDisp
+
 
 class JoystickController(QWidget):
     """模拟摇杆组件 - 提供X/Y坐标输出和视觉反馈"""
@@ -357,7 +359,7 @@ class ControlPanel(GroupHeaderCardWidget):
     def __init__(self):
         super().__init__()
         self.initUI()
-        self.setFixedSize(400, 600)
+        # self.setFixedSize(400, 600)
 
     def initUI(self):
         main_layout = QVBoxLayout()
@@ -373,7 +375,8 @@ class ControlPanel(GroupHeaderCardWidget):
         # 摇杆组件
         self.joystick = JoystickController()
         joystick_layout.addWidget(self.joystick, alignment=Qt.AlignCenter)
-        
+        self.channelDisp=ChannelDisp()
+        joystick_layout.addWidget(self.channelDisp, alignment=Qt.AlignCenter)
         # 数值显示标签
         self.value_label = QLabel("X: 0.00  Y: 0.00")
         self.value_label.setFont(QFont("Microsoft YaHei", 12))
@@ -384,71 +387,21 @@ class ControlPanel(GroupHeaderCardWidget):
         # 连接摇杆信号
         self.joystick.position_changed.connect(self.on_joystick_changed)
         
-        main_layout.addLayout(joystick_layout)
-
-        # 方向按钮区域 - 使用ButtonController组件
-        self.button_controller = ButtonController()
-        main_layout.addWidget(self.button_controller)
-        
-        # 连接按钮信号
-        self.button_controller.forward_changed.connect(self.on_forward_changed)
-        self.button_controller.backward_changed.connect(self.on_backward_changed)
-        self.button_controller.left_changed.connect(self.on_left_changed)
-        self.button_controller.right_changed.connect(self.on_right_changed)
-        self.button_controller.emergency_triggered.connect(self.on_emergency_stop)
-        
-        # 底部留白
+        main_layout.addLayout(joystick_layout)    
         main_layout.addStretch(1)
-        
         self.vBoxLayout.addLayout(main_layout)
 
     def on_joystick_changed(self, x, y):
         """摇杆位置变化回调"""
         self.value_label.setText(f"X: {x:.2f}  Y: {y:.2f}")
+        self.channelDisp.setJoystickValue(x,y)
         self.joystick_changed.emit(x,y)
         # 这里可以添加你的控制逻辑
         # 例如：发送控制命令、更新机器人位置等
         if abs(x) > 0.1 or abs(y) > 0.1:  # 只有移动超过阈值才处理
             print(f"摇杆移动: X={x:.2f}, Y={y:.2f}")
 
-    def on_forward_changed(self, value):
-        """前进按钮回调"""
-        print(f"前进: {value}")
-        # 这里可以添加前进控制逻辑
-        # value: 1(按下), 0(释放)
 
-    def on_backward_changed(self, value):
-        """后退按钮回调"""
-        print(f"后退: {value}")
-        # 这里可以添加后退控制逻辑
-        # value: 1(按下), 0(释放)
-
-    def on_left_changed(self, value):
-        """左转按钮回调"""
-        print(f"左转: {value}")
-        # 这里可以添加左转控制逻辑
-        # value: 1(按下), 0(释放)
-
-    def on_right_changed(self, value):
-        """右转按钮回调"""
-        print(f"右转: {value}")
-        # 这里可以添加右转控制逻辑
-        # value: 1(按下), 0(释放)
-
-    def on_emergency_stop(self):
-        """急停按钮回调"""
-        print("紧急停止！")
-        # 这里可以添加急停逻辑
-        # 例如：停止所有运动、发送急停命令等
-        
-        # 可选：显示急停提示
-        from PyQt5.QtWidgets import QMessageBox
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Warning)
-        msg.setWindowTitle("紧急停止")
-        msg.setText("设备已紧急停止")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
 
     def centerWindow(self):
         """窗口居中显示"""

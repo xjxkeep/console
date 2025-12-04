@@ -212,6 +212,11 @@ class ChannelDisp(QWidget):
                 layout.addWidget(channel,i,j)
         self.setLayout(layout)
     
+    def setJoystickValue(self,x:float,y:float):
+        self.channels[0].setValue(round(50+x*50))
+        self.channels[1].setValue(round(50-y*50))
+
+
     def update_channel_value(self,idx:int,value:int):
         if idx>=len(self.channels):
             return

@@ -69,6 +69,14 @@ class Controller(ScrollArea):
         self.channelGroup.setValues(values)
         self.__emit_control_message()
     
+    def setJoystickValue(self,x:float,y:float):
+        self.channelGroup.setValue(0,round(50+x*50))
+        self.channelGroup.setValue(1,round(50-y*50))
+        self.__emit_control_message()
+
+    
+
+    
     def close(self):
         self.timer.stop()
         logging.info("controller timer stop")
