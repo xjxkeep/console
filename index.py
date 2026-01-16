@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 
-from PyQt5.QtCore import QThread, Qt, pyqtSignal
+from PyQt5.QtCore import QThread, Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QCloseEvent, QPixmap
 from PyQt5.QtWidgets import QApplication, QSplashScreen, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel
@@ -29,7 +29,7 @@ class MainWindow(FluentWindow):
     
     def setupUi(self):
         from monitor import Monitor
-        from view.video import VideoPlayer
+        from components.video import VideoPlayer
         from controller import Controller
         from debug import Debug
         from about import About
@@ -63,6 +63,12 @@ class MainWindow(FluentWindow):
         self.setting = Setting()
         self.load_setting()
         self.setupUi() 
+        
+        # 初始化运行时间计时器
+        self.uptime_timer = QTimer(self)
+        self.uptime_seconds = 0  # 记录总秒数
+        self.uptime_timer.timeout.connect(self.update_uptime)
+        self.uptime_timer.start(1000)  # 每秒更新一次
         # 初始化 API 实例
         self.api = API(self.setting,self)
         # self.device=self.api.get_device_info()
@@ -168,6 +174,15 @@ class MainWindow(FluentWindow):
     def quic_client_connection_error(self,error):
         logging.info(f"quic client connection error {error}")
         
+    def update_uptime(self):
+        """更新运行时间"""
+        self.uptime_seconds += 1
+        hours = self.uptime_seconds // 3600
+        minutes = (self.uptime_seconds % 3600) // 60
+        seconds = self.uptime_seconds % 60
+        
+        # 更新 StatusPanel 中的运行时间
+        self.monitor.statusPanel.update_uptime(hours, minutes, seconds)
     
     def closeEvent(self, a0: QCloseEvent | None) -> None:
         logging.info("mainwindow closeEvent")    

@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import QApplication
 import qrcode
 from PyQt5.QtGui import QPixmap
 from io import BytesIO
-from view.common import BLineEdit,TLineEdit
+from components.common import BLineEdit,TLineEdit
 import hid
 class InfoItem(QWidget):
     def __init__(self,parent=None,label=None,info=None,secret=False):

@@ -43,11 +43,14 @@ class JoyStick(ControllerBase):
                     return []
                 
                 for i in range(pygame.joystick.get_count()):
-                    joy = pygame.joystick.Joystick(i)
-                    devices.append({
-                        'id': i,
-                        'name': joy.get_name()
-                    })
+                    try:
+                        joy = pygame.joystick.Joystick(i)
+                        devices.append({
+                            'id': i,
+                            'name': joy.get_name()
+                        })
+                    except Exception as e:
+                        logging.info(f"Error accessing joystick {i}: {e}")
         except Exception as e:
             logging.info(f"Error getting device list: {e}")
         return devices

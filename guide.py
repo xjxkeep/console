@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import *
 import sys
 from PyQt5.QtCore import QTimer,QEventLoop
 from pkg.joystick import JoyStick
-from view.info import DeviceInfo
+from components.info import DeviceInfo
 
 class GuideButtonGroup(QWidget):
     prevClicked=pyqtSignal()

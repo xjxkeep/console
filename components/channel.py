@@ -135,6 +135,15 @@ class Detector(QWidget):
         self.setupUi()
         self.deviceMap:dict[Any, Any]=dict[Any, Any]()      
         self.joystick=JoyStick()
+        
+        # 延迟导入 JoystickController 以避免循环导入
+        from components.controller import JoystickController
+        self.virtual_joystick=JoystickController()
+        # 默认连接虚拟摇杆的信号
+        self.virtual_joystick.position_changed.connect(self.handle_virtual_joystick_change)
+        self.current_device_type = None
+        # 初始化时刷新设备列表并默认选择模拟摇杆
+        self.refreshDevices()
 
 
     def setupUi(self):
@@ -153,8 +162,27 @@ class Detector(QWidget):
         device=self.deviceMap.get(idx)
         if device is None:
             return
-        self.__getattribute__(device["type"]).select_device(device["id"])
-        self.__getattribute__(device["type"]).signal.connect(self.signal.emit)
+        
+        # 断开当前物理摇杆设备的信号连接（如果有）
+        if hasattr(self, "joystick") and hasattr(self.joystick, "signal"):
+            try:
+                self.joystick.signal.disconnect(self.signal.emit)
+            except TypeError:
+                # 如果没有连接，忽略错误
+                pass
+        
+        # 设置当前设备类型
+        self.current_device_type = device["type"]
+        
+        # 连接新设备的信号
+        if device["type"] == "virtual_joystick":
+            # 虚拟摇杆已经在初始化时连接了信号，只需要标记当前设备类型
+            logging.info("选择了模拟摇杆")
+        else:
+            # 选择物理摇杆设备
+            self.__getattribute__(device["type"]).select_device(device["id"])
+            self.__getattribute__(device["type"]).signal.connect(self.signal.emit)
+            logging.info(f"选择了设备: {device['type']}, ID: {device['id']}")
         
     def setDevices(self,devices:list):
         self.devices.clear()
@@ -163,7 +191,12 @@ class Detector(QWidget):
     def getDevices(self):
         deviceCount=0
         devices=[]
-        # TODO 实现其他设备
+        # 添加模拟摇杆选项
+        devices.append("模拟摇杆")
+        self.deviceMap[deviceCount]={"id":0,"type":"virtual_joystick"}
+        deviceCount+=1
+        
+        # 添加物理摇杆设备
         joys=self.joystick.get_device_list()
         for joy in joys:
             devices.append(joy["name"])
@@ -175,6 +208,10 @@ class Detector(QWidget):
     
     def refreshDevices(self):
         self.setDevices(self.getDevices())
+        # 默认选择模拟摇杆（索引0）
+        self.devices.setCurrentIndex(0)
+        # 手动触发设备选择事件
+        self.deviceChosen(0)
     
 
     def close(self):
@@ -186,6 +223,15 @@ class Detector(QWidget):
     def lazy_init(self):
         if not hasattr(self,"joystick"):
             self.joystick.init()
+    
+    def handle_virtual_joystick_change(self, x: float, y: float):
+        """处理虚拟摇杆的位置变化信号"""
+        if self.current_device_type == "virtual_joystick":
+            # 将x,y转换为channel值（0-100）
+            channel0_value = int(50 + x * 50)  # 左右控制通道0
+            channel1_value = int(50 + y * 50)  # 上下控制通道1
+            # 发送信号，格式为[channel0_value, channel1_value]
+            self.signal.emit([channel0_value, channel1_value])
     
 
 

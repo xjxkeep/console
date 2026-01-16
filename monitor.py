@@ -8,14 +8,14 @@ from PyQt5.QtWidgets import *
 import numpy as np
 from qfluentwidgets import PushButton
 
-from view.channel import ChannelGroup,ChannelDisp
+from components.channel import ChannelGroup,ChannelDisp
 from pkg.model import Setting
 from protocol.highway_pb2 import Device, DeviceParam, Video
-from view.imu import IMUWidget
-from view.status import StatusBar, StatusPanel
-from view.video import VideoPanel
-from view.wave import WaveformWidget
-from view.controller import ControlPanel
+from components.imu import IMUWidget
+from components.status import StatusBar, StatusPanel
+from components.video import VideoPanel
+from components.wave import WaveformWidget
+from components.controller import ControlPanel
 
 
 # TODO imu 显示会导致无法resize窗口
@@ -109,9 +109,47 @@ class Monitor(QWidget):
         
     
     def update_device_param(self,data:DeviceParam):
-        # logging.info(data)
-        # self.imu.update_imu_data(data.imu_param)
-        pass
+        """更新设备参数数据并显示在界面上"""
+        try:
+            # 更新 CPU 利用率
+            self.statusPanel.update_cpu(data.cpu_usage)
+            
+            # 更新内存利用率
+            self.statusPanel.update_memory(data.memory_usage)
+            
+            # 更新信号强度 (将 dBm 转换为百分比)
+            # RSSI 通常在 -30 dBm (最强) 到 -120 dBm (最弱) 之间
+            if data.rssi_dbm >= -30:
+                signal_strength = 100
+            elif data.rssi_dbm <= -120:
+                signal_strength = 0
+            else:
+                signal_strength = (data.rssi_dbm + 120) / 0.9
+            self.statusPanel.update_signal_strength(signal_strength)
+            
+            # 更新电池电压
+            self.statusPanel.update_battery_voltage(data.voltage)
+            
+            # 更新系统温度
+            self.statusPanel.update_temperature(data.temperature)
+            
+            # 更新加速度数据
+            if data.imu_param:
+                self.statusPanel.update_acceleration(
+                    data.imu_param.acceleration_x,
+                    data.imu_param.acceleration_y,
+                    data.imu_param.acceleration_z
+                )
+                
+                # 更新角速度数据
+                self.statusPanel.update_angular_velocity(
+                    data.imu_param.gyroscope_x,
+                    data.imu_param.gyroscope_y,
+                    data.imu_param.gyroscope_z
+                )
+            
+        except Exception as e:
+            logging.error(f"更新设备参数数据时出错: {e}")
 
     def update_wave_form(self,value:np.ndarray):
         self.waveform.set_data(value)

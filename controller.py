@@ -25,7 +25,7 @@ from qfluentwidgets import (
 
 from pkg.joystick import JoyStick
 from pkg.model import Setting
-from view.channel import Detector,ChannelGroup
+from components.channel import Detector,ChannelGroup
 
 
 class Controller(ScrollArea):

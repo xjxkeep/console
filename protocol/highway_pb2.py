@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rhighway.proto\"\xaf\x02\n\x06\x44\x65vice\x12\'\n\x0b\x64\x65vice_type\x18\x01 \x01(\x0e\x32\x12.Device.DeviceType\x12)\n\x0cmessage_type\x18\x02 \x01(\x0e\x32\x13.Device.MessageType\x12\n\n\x02id\x18\x03 \x01(\x03\"*\n\nDeviceType\x12\x0e\n\nCONTROLLER\x10\x00\x12\x0c\n\x08RECEIVER\x10\x01\"\x98\x01\n\x0bMessageType\x12\t\n\x05VIDEO\x10\x00\x12\x0b\n\x07\x43ONTROL\x10\x01\x12\n\n\x06REPORT\x10\x02\x12\x08\n\x04\x46ILE\x10\x03\x12\t\n\x05\x41UDIO\x10\x04\x12\x0f\n\x0b\x44\x45VICEPARAM\x10\x05\x12\x1d\n\x19\x43LOCKSYNCHRONIZATIONPARAM\x10\x06\x12\x12\n\x0eVIDEO_FEEDBACK\x10\x07\x12\x0c\n\x08\x44\x41TAGRAM\x10\x08\"h\n\x08Register\x12\x17\n\x06\x64\x65vice\x18\x01 \x01(\x0b\x32\x07.Device\x12!\n\x10subscribe_device\x18\x02 \x01(\x0b\x32\x07.Device\x12\r\n\x05token\x18\x03 \x01(\t\x12\x11\n\tread_only\x18\x04 \x01(\x08\"\x1b\n\x07\x43ontrol\x12\x10\n\x08\x63hannels\x18\x01 \x03(\x05\"\x19\n\x06Report\x12\x0f\n\x07\x62\x61ttery\x18\x01 \x01(\x02\"\xd6\x05\n\x05Video\x12\x0b\n\x03raw\x18\x01 \x01(\x0c\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\x12\x10\n\x08\x66rame_id\x18\x04 \x01(\x03\x12\x10\n\x08slice_id\x18\x05 \x01(\x03\x12\x13\n\x0bslice_count\x18\x06 \x01(\x03\x12\"\n\tnalu_type\x18\x07 \x01(\x0e\x32\x0f.Video.NaluType\x12\"\n\tcode_type\x18\x08 \x01(\x0e\x32\x0f.Video.CodeType\"\x8b\x04\n\x08NaluType\x12\x19\n\x15NALU_TYPE_UNSPECIFIED\x10\x00\x12\x1b\n\x17NALU_TYPE_NON_IDR_SLICE\x10\x01\x12\x1e\n\x1aNALU_TYPE_DATA_PARTITION_A\x10\x02\x12\x1e\n\x1aNALU_TYPE_DATA_PARTITION_B\x10\x03\x12\x1e\n\x1aNALU_TYPE_DATA_PARTITION_C\x10\x04\x12\x17\n\x13NALU_TYPE_IDR_SLICE\x10\x05\x12\x11\n\rNALU_TYPE_SEI\x10\x06\x12\x11\n\rNALU_TYPE_SPS\x10\x07\x12\x11\n\rNALU_TYPE_PPS\x10\x08\x12#\n\x1fNALU_TYPE_ACCESS_UNIT_DELIMITER\x10\t\x12\x1d\n\x19NALU_TYPE_END_OF_SEQUENCE\x10\n\x12\x1b\n\x17NALU_TYPE_END_OF_STREAM\x10\x0b\x12\x19\n\x15NALU_TYPE_FILLER_DATA\x10\x0c\x12\x1b\n\x17NALU_TYPE_SPS_EXTENSION\x10\r\x12\x19\n\x15NALU_TYPE_PREFIX_NALU\x10\x0e\x12\x18\n\x14NALU_TYPE_SUBSET_SPS\x10\x0f\x12!\n\x1dNALU_TYPE_DEPTH_PARAMETER_SET\x10\x10\x12\x1e\n\x1aNALU_TYPE_DEPTH_VIEW_SLICE\x10\x11\"\x04\x08\x12\x10\x17\"\x1e\n\x08\x43odeType\x12\x08\n\x04H264\x10\x00\x12\x08\n\x04H265\x10\x01\"G\n\rVideoFeedback\x12\x1c\n\x14received_frame_index\x18\x01 \x01(\x03\x12\x18\n\x10lost_frame_count\x18\x02 \x01(\x03\"~\n\x04\x46ile\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0e\n\x06offset\x18\x02 \x01(\x04\x12\x12\n\ntotal_size\x18\x03 \x01(\x04\x12\x0c\n\x04\x64\x61ta\x18\x04 \x01(\x0c\x12\x10\n\x08\x63hecksum\x18\x05 \x01(\r\x12\x10\n\x08\x62lock_id\x18\x06 \x01(\r\x12\x12\n\nlast_block\x18\x07 \x01(\x08\"8\n\x05\x41udio\x12\x0b\n\x03raw\x18\x01 \x01(\x0c\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\x12\x0f\n\x07\x63ounter\x18\x03 \x01(\x04\"\x91\x01\n\x08IMUParam\x12\x13\n\x0bgyroscope_x\x18\x01 \x01(\x01\x12\x13\n\x0bgyroscope_y\x18\x02 \x01(\x01\x12\x13\n\x0bgyroscope_z\x18\x03 \x01(\x01\x12\x16\n\x0e\x61\x63\x63\x65leration_x\x18\x04 \x01(\x01\x12\x16\n\x0e\x61\x63\x63\x65leration_y\x18\x05 \x01(\x01\x12\x16\n\x0e\x61\x63\x63\x65leration_z\x18\x06 \x01(\x01\">\n\x0b\x44\x65viceParam\x12\x11\n\ttimestamp\x18\x01 \x01(\x03\x12\x1c\n\timu_param\x18\x02 \x01(\x0b\x32\t.IMUParam\"U\n\x19\x43lockSynchronizationParam\x12\x11\n\treq_tx_ms\x18\x01 \x01(\x03\x12\x11\n\treq_rx_ms\x18\x02 \x01(\x03\x12\x12\n\nresp_tx_ms\x18\x03 \x01(\x03\x42\x1aZ\x18protocol/highway;highwayb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rhighway.proto\"i\n\x0e\x43ontrolMessage\x12)\n\x04type\x18\x01 \x01(\x0e\x32\x1b.ControlMessage.ControlType\",\n\x0b\x43ontrolType\x12\x0e\n\nSEND_START\x10\x00\x12\r\n\tSEND_STOP\x10\x01\"\xc3\x02\n\x06\x44\x65vice\x12\'\n\x0b\x64\x65vice_type\x18\x01 \x01(\x0e\x32\x12.Device.DeviceType\x12)\n\x0cmessage_type\x18\x02 \x01(\x0e\x32\x13.Device.MessageType\x12\n\n\x02id\x18\x03 \x01(\x03\"*\n\nDeviceType\x12\x0e\n\nCONTROLLER\x10\x00\x12\x0c\n\x08RECEIVER\x10\x01\"\xac\x01\n\x0bMessageType\x12\t\n\x05VIDEO\x10\x00\x12\x0b\n\x07\x43ONTROL\x10\x01\x12\n\n\x06REPORT\x10\x02\x12\x08\n\x04\x46ILE\x10\x03\x12\t\n\x05\x41UDIO\x10\x04\x12\x0f\n\x0b\x44\x45VICEPARAM\x10\x05\x12\x1d\n\x19\x43LOCKSYNCHRONIZATIONPARAM\x10\x06\x12\x12\n\x0eVIDEO_FEEDBACK\x10\x07\x12\x0c\n\x08\x44\x41TAGRAM\x10\x08\x12\x12\n\x0eSTREAM_CONTROL\x10\t\"h\n\x08Register\x12\x17\n\x06\x64\x65vice\x18\x01 \x01(\x0b\x32\x07.Device\x12!\n\x10subscribe_device\x18\x02 \x01(\x0b\x32\x07.Device\x12\r\n\x05token\x18\x03 \x01(\t\x12\x11\n\tread_only\x18\x04 \x01(\x08\"\x1b\n\x07\x43ontrol\x12\x10\n\x08\x63hannels\x18\x01 \x03(\x05\"\x19\n\x06Report\x12\x0f\n\x07\x62\x61ttery\x18\x01 \x01(\x02\"\xd6\x05\n\x05Video\x12\x0b\n\x03raw\x18\x01 \x01(\x0c\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\x12\x10\n\x08\x66rame_id\x18\x04 \x01(\x03\x12\x10\n\x08slice_id\x18\x05 \x01(\x03\x12\x13\n\x0bslice_count\x18\x06 \x01(\x03\x12\"\n\tnalu_type\x18\x07 \x01(\x0e\x32\x0f.Video.NaluType\x12\"\n\tcode_type\x18\x08 \x01(\x0e\x32\x0f.Video.CodeType\"\x8b\x04\n\x08NaluType\x12\x19\n\x15NALU_TYPE_UNSPECIFIED\x10\x00\x12\x1b\n\x17NALU_TYPE_NON_IDR_SLICE\x10\x01\x12\x1e\n\x1aNALU_TYPE_DATA_PARTITION_A\x10\x02\x12\x1e\n\x1aNALU_TYPE_DATA_PARTITION_B\x10\x03\x12\x1e\n\x1aNALU_TYPE_DATA_PARTITION_C\x10\x04\x12\x17\n\x13NALU_TYPE_IDR_SLICE\x10\x05\x12\x11\n\rNALU_TYPE_SEI\x10\x06\x12\x11\n\rNALU_TYPE_SPS\x10\x07\x12\x11\n\rNALU_TYPE_PPS\x10\x08\x12#\n\x1fNALU_TYPE_ACCESS_UNIT_DELIMITER\x10\t\x12\x1d\n\x19NALU_TYPE_END_OF_SEQUENCE\x10\n\x12\x1b\n\x17NALU_TYPE_END_OF_STREAM\x10\x0b\x12\x19\n\x15NALU_TYPE_FILLER_DATA\x10\x0c\x12\x1b\n\x17NALU_TYPE_SPS_EXTENSION\x10\r\x12\x19\n\x15NALU_TYPE_PREFIX_NALU\x10\x0e\x12\x18\n\x14NALU_TYPE_SUBSET_SPS\x10\x0f\x12!\n\x1dNALU_TYPE_DEPTH_PARAMETER_SET\x10\x10\x12\x1e\n\x1aNALU_TYPE_DEPTH_VIEW_SLICE\x10\x11\"\x04\x08\x12\x10\x17\"\x1e\n\x08\x43odeType\x12\x08\n\x04H264\x10\x00\x12\x08\n\x04H265\x10\x01\"G\n\rVideoFeedback\x12\x1c\n\x14received_frame_index\x18\x01 \x01(\x03\x12\x18\n\x10lost_frame_count\x18\x02 \x01(\x03\"~\n\x04\x46ile\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0e\n\x06offset\x18\x02 \x01(\x04\x12\x12\n\ntotal_size\x18\x03 \x01(\x04\x12\x0c\n\x04\x64\x61ta\x18\x04 \x01(\x0c\x12\x10\n\x08\x63hecksum\x18\x05 \x01(\r\x12\x10\n\x08\x62lock_id\x18\x06 \x01(\r\x12\x12\n\nlast_block\x18\x07 \x01(\x08\"8\n\x05\x41udio\x12\x0b\n\x03raw\x18\x01 \x01(\x0c\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\x12\x0f\n\x07\x63ounter\x18\x03 \x01(\x04\"\x91\x01\n\x08IMUParam\x12\x13\n\x0bgyroscope_x\x18\x01 \x01(\x01\x12\x13\n\x0bgyroscope_y\x18\x02 \x01(\x01\x12\x13\n\x0bgyroscope_z\x18\x03 \x01(\x01\x12\x16\n\x0e\x61\x63\x63\x65leration_x\x18\x04 \x01(\x01\x12\x16\n\x0e\x61\x63\x63\x65leration_y\x18\x05 \x01(\x01\x12\x16\n\x0e\x61\x63\x63\x65leration_z\x18\x06 \x01(\x01\"\xae\x01\n\x0b\x44\x65viceParam\x12\x11\n\ttimestamp\x18\x01 \x01(\x03\x12\x1c\n\timu_param\x18\x02 \x01(\x0b\x32\t.IMUParam\x12\x13\n\x0btemperature\x18\x03 \x01(\x01\x12\x14\n\x0cmemory_usage\x18\x04 \x01(\x01\x12\x11\n\tcpu_usage\x18\x05 \x01(\x01\x12\r\n\x05power\x18\x06 \x01(\x05\x12\x10\n\x08rssi_dbm\x18\x07 \x01(\x05\x12\x0f\n\x07voltage\x18\x08 \x01(\x01\"U\n\x19\x43lockSynchronizationParam\x12\x11\n\treq_tx_ms\x18\x01 \x01(\x03\x12\x11\n\treq_rx_ms\x18\x02 \x01(\x03\x12\x12\n\nresp_tx_ms\x18\x03 \x01(\x03\x42\x1aZ\x18protocol/highway;highwayb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,34 +32,38 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'highway_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z\030protocol/highway;highway'
-  _globals['_DEVICE']._serialized_start=18
-  _globals['_DEVICE']._serialized_end=321
-  _globals['_DEVICE_DEVICETYPE']._serialized_start=124
-  _globals['_DEVICE_DEVICETYPE']._serialized_end=166
-  _globals['_DEVICE_MESSAGETYPE']._serialized_start=169
-  _globals['_DEVICE_MESSAGETYPE']._serialized_end=321
-  _globals['_REGISTER']._serialized_start=323
-  _globals['_REGISTER']._serialized_end=427
-  _globals['_CONTROL']._serialized_start=429
-  _globals['_CONTROL']._serialized_end=456
-  _globals['_REPORT']._serialized_start=458
-  _globals['_REPORT']._serialized_end=483
-  _globals['_VIDEO']._serialized_start=486
-  _globals['_VIDEO']._serialized_end=1212
-  _globals['_VIDEO_NALUTYPE']._serialized_start=657
-  _globals['_VIDEO_NALUTYPE']._serialized_end=1180
-  _globals['_VIDEO_CODETYPE']._serialized_start=1182
-  _globals['_VIDEO_CODETYPE']._serialized_end=1212
-  _globals['_VIDEOFEEDBACK']._serialized_start=1214
-  _globals['_VIDEOFEEDBACK']._serialized_end=1285
-  _globals['_FILE']._serialized_start=1287
-  _globals['_FILE']._serialized_end=1413
-  _globals['_AUDIO']._serialized_start=1415
-  _globals['_AUDIO']._serialized_end=1471
-  _globals['_IMUPARAM']._serialized_start=1474
-  _globals['_IMUPARAM']._serialized_end=1619
-  _globals['_DEVICEPARAM']._serialized_start=1621
-  _globals['_DEVICEPARAM']._serialized_end=1683
-  _globals['_CLOCKSYNCHRONIZATIONPARAM']._serialized_start=1685
-  _globals['_CLOCKSYNCHRONIZATIONPARAM']._serialized_end=1770
+  _globals['_CONTROLMESSAGE']._serialized_start=17
+  _globals['_CONTROLMESSAGE']._serialized_end=122
+  _globals['_CONTROLMESSAGE_CONTROLTYPE']._serialized_start=78
+  _globals['_CONTROLMESSAGE_CONTROLTYPE']._serialized_end=122
+  _globals['_DEVICE']._serialized_start=125
+  _globals['_DEVICE']._serialized_end=448
+  _globals['_DEVICE_DEVICETYPE']._serialized_start=231
+  _globals['_DEVICE_DEVICETYPE']._serialized_end=273
+  _globals['_DEVICE_MESSAGETYPE']._serialized_start=276
+  _globals['_DEVICE_MESSAGETYPE']._serialized_end=448
+  _globals['_REGISTER']._serialized_start=450
+  _globals['_REGISTER']._serialized_end=554
+  _globals['_CONTROL']._serialized_start=556
+  _globals['_CONTROL']._serialized_end=583
+  _globals['_REPORT']._serialized_start=585
+  _globals['_REPORT']._serialized_end=610
+  _globals['_VIDEO']._serialized_start=613
+  _globals['_VIDEO']._serialized_end=1339
+  _globals['_VIDEO_NALUTYPE']._serialized_start=784
+  _globals['_VIDEO_NALUTYPE']._serialized_end=1307
+  _globals['_VIDEO_CODETYPE']._serialized_start=1309
+  _globals['_VIDEO_CODETYPE']._serialized_end=1339
+  _globals['_VIDEOFEEDBACK']._serialized_start=1341
+  _globals['_VIDEOFEEDBACK']._serialized_end=1412
+  _globals['_FILE']._serialized_start=1414
+  _globals['_FILE']._serialized_end=1540
+  _globals['_AUDIO']._serialized_start=1542
+  _globals['_AUDIO']._serialized_end=1598
+  _globals['_IMUPARAM']._serialized_start=1601
+  _globals['_IMUPARAM']._serialized_end=1746
+  _globals['_DEVICEPARAM']._serialized_start=1749
+  _globals['_DEVICEPARAM']._serialized_end=1923
+  _globals['_CLOCKSYNCHRONIZATIONPARAM']._serialized_start=1925
+  _globals['_CLOCKSYNCHRONIZATIONPARAM']._serialized_end=2010
 # @@protoc_insertion_point(module_scope)

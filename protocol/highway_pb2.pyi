@@ -6,6 +6,18 @@ from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Map
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class ControlMessage(_message.Message):
+    __slots__ = ("type",)
+    class ControlType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+        __slots__ = ()
+        SEND_START: _ClassVar[ControlMessage.ControlType]
+        SEND_STOP: _ClassVar[ControlMessage.ControlType]
+    SEND_START: ControlMessage.ControlType
+    SEND_STOP: ControlMessage.ControlType
+    TYPE_FIELD_NUMBER: _ClassVar[int]
+    type: ControlMessage.ControlType
+    def __init__(self, type: _Optional[_Union[ControlMessage.ControlType, str]] = ...) -> None: ...
+
 class Device(_message.Message):
     __slots__ = ("device_type", "message_type", "id")
     class DeviceType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
@@ -25,6 +37,7 @@ class Device(_message.Message):
         CLOCKSYNCHRONIZATIONPARAM: _ClassVar[Device.MessageType]
         VIDEO_FEEDBACK: _ClassVar[Device.MessageType]
         DATAGRAM: _ClassVar[Device.MessageType]
+        STREAM_CONTROL: _ClassVar[Device.MessageType]
     VIDEO: Device.MessageType
     CONTROL: Device.MessageType
     REPORT: Device.MessageType
@@ -34,6 +47,7 @@ class Device(_message.Message):
     CLOCKSYNCHRONIZATIONPARAM: Device.MessageType
     VIDEO_FEEDBACK: Device.MessageType
     DATAGRAM: Device.MessageType
+    STREAM_CONTROL: Device.MessageType
     DEVICE_TYPE_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_TYPE_FIELD_NUMBER: _ClassVar[int]
     ID_FIELD_NUMBER: _ClassVar[int]
@@ -181,12 +195,24 @@ class IMUParam(_message.Message):
     def __init__(self, gyroscope_x: _Optional[float] = ..., gyroscope_y: _Optional[float] = ..., gyroscope_z: _Optional[float] = ..., acceleration_x: _Optional[float] = ..., acceleration_y: _Optional[float] = ..., acceleration_z: _Optional[float] = ...) -> None: ...
 
 class DeviceParam(_message.Message):
-    __slots__ = ("timestamp", "imu_param")
+    __slots__ = ("timestamp", "imu_param", "temperature", "memory_usage", "cpu_usage", "power", "rssi_dbm", "voltage")
     TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
     IMU_PARAM_FIELD_NUMBER: _ClassVar[int]
+    TEMPERATURE_FIELD_NUMBER: _ClassVar[int]
+    MEMORY_USAGE_FIELD_NUMBER: _ClassVar[int]
+    CPU_USAGE_FIELD_NUMBER: _ClassVar[int]
+    POWER_FIELD_NUMBER: _ClassVar[int]
+    RSSI_DBM_FIELD_NUMBER: _ClassVar[int]
+    VOLTAGE_FIELD_NUMBER: _ClassVar[int]
     timestamp: int
     imu_param: IMUParam
-    def __init__(self, timestamp: _Optional[int] = ..., imu_param: _Optional[_Union[IMUParam, _Mapping]] = ...) -> None: ...
+    temperature: float
+    memory_usage: float
+    cpu_usage: float
+    power: int
+    rssi_dbm: int
+    voltage: float
+    def __init__(self, timestamp: _Optional[int] = ..., imu_param: _Optional[_Union[IMUParam, _Mapping]] = ..., temperature: _Optional[float] = ..., memory_usage: _Optional[float] = ..., cpu_usage: _Optional[float] = ..., power: _Optional[int] = ..., rssi_dbm: _Optional[int] = ..., voltage: _Optional[float] = ...) -> None: ...
 
 class ClockSynchronizationParam(_message.Message):
     __slots__ = ("req_tx_ms", "req_rx_ms", "resp_tx_ms")

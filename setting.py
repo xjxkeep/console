@@ -13,7 +13,7 @@ import qrcode
 
 from pkg.hid_caller import HID
 from pkg.model import HIDBody
-from view.common import BLineEdit, TLineEdit
+from components.common import BLineEdit, TLineEdit
 class InfoItem(QWidget):
     def __init__(self,parent=None,label=None,info=None,secret=False):
         super().__init__(parent)

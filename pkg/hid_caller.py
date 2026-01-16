@@ -24,6 +24,10 @@ class HIDConnectionThread(QThread):
     def run(self):
         while self.running:
             try:
+                # 在每次迭代开始时检查是否应该停止
+                if not self.running:
+                    break
+                    
                 devices = hid.enumerate(int(self.vendor_id), int(self.product_id))
                 if devices and not self.is_connected:
                     self.connected.emit()
@@ -31,9 +35,17 @@ class HIDConnectionThread(QThread):
                 elif not devices and self.is_connected:
                     self.disconnected.emit()
                     self.is_connected=False
-                time.sleep(1)
+                
+                # 短时间睡眠，以便能够更快地响应stop()方法
+                for _ in range(20):
+                    if not self.running:
+                        break
+                    time.sleep(0.05)
             except Exception as e:
                 logging.info(f"HID connection error: {e}")
+                # 发生错误时也检查是否应该停止
+                if not self.running:
+                    break
                 time.sleep(1)
     
     def stop(self):
@@ -225,19 +237,36 @@ class HID(QObject):
 
     def cleanup(self):
         """清理资源"""
+        logging.info("HID cleanup started")
+        
         # 停止连接监控线程
         if hasattr(self, 'connection_thread'):
             self.connection_thread.stop()
+            logging.info("HID connection thread stopped")
         
         # 停止数据接收线程
         if self.data_receiver_thread:
             self.data_receiver_thread.stop()
+            self.data_receiver_thread = None
+            logging.info("HID data receiver thread stopped")
         
         # 关闭HID设备
         if self.hid_device:
             try:
                 self.hid_device.close()
-            except:
-                pass
+                logging.info("HID device closed")
+            except Exception as e:
+                logging.info(f"Error closing HID device: {e}")
+            finally:
+                self.hid_device = None
+        
+        # 清理所有等待的请求
+        with self.pending_lock:
+            for event in self.pending_requests.values():
+                event.set()
+            self.pending_requests.clear()
+            logging.info("HID pending requests cleared")
+        
+        logging.info("HID cleanup completed")
 
 

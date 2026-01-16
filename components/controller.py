@@ -1,13 +1,135 @@
 import sys
+import os
 import math
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                            QHBoxLayout, QLabel)
+from PyQt5.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QSlider,
+)
 from PyQt5.QtCore import Qt, QPoint, QPropertyAnimation, QEasingCurve, pyqtProperty, pyqtSignal
 from PyQt5.QtGui import QPainter, QBrush, QPen, QColor, QFont, QRadialGradient
-from qfluentwidgets import (FluentWindow, SubtitleLabel, PushButton,
-                           Theme, setTheme,GroupHeaderCardWidget)
+from qfluentwidgets import (
+    FluentWindow,
+    SubtitleLabel,
+    PushButton,
+    Theme,
+    components,
+    setTheme,
+    GroupHeaderCardWidget,
+    SpinBox,
+    BodyLabel,
+)
 
-from view.channel import ChannelDisp
+if __name__ == "__main__" and __package__ is None:
+    sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
+from components.channel import ChannelDisp
+
+
+class ThrottleCurveView(QWidget):
+    value_changed = pyqtSignal(float, float)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._k = 0.0
+        self._input_value = 50.0
+        self._points = []
+        self.setMinimumHeight(220)
+
+    def set_parameters(self, k: float):
+        self._k = max(-1.0, min(1.0, k))
+        self.update()
+
+    def set_input_value(self, value: float):
+        self._input_value = max(0.0, min(100.0, value))
+        y = self._evaluate(self._input_value)
+        self.value_changed.emit(self._input_value, y)
+        self.update()
+
+    def _evaluate(self, x: float) -> float:
+        t = x / 100.0
+        k = self._k
+        y = (1.0 - k) * t + k * (t * t * t)
+        return max(0.0, min(1.0, y)) * 100.0
+
+    def _build_points(self, rect):
+        left = rect.left()
+        right = rect.right()
+        top = rect.top()
+        bottom = rect.bottom()
+        width = max(1.0, right - left)
+        height = max(1.0, bottom - top)
+        pts = []
+        for i in range(101):
+            x = i
+            y = self._evaluate(x)
+            px = left + (x / 100.0) * width
+            py = bottom - (y / 100.0) * height
+            pts.append(QPoint(int(px), int(py)))
+        self._points = pts
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = self.rect().adjusted(40, 10, -20, -30)
+        if rect.width() <= 0 or rect.height() <= 0:
+            return
+
+        painter.fillRect(self.rect(), self.palette().window())
+
+        axis_pen = QPen(self.palette().mid().color())
+        axis_pen.setWidth(1)
+        painter.setPen(axis_pen)
+        painter.drawLine(rect.left(), rect.bottom(), rect.right(), rect.bottom())
+        painter.drawLine(rect.left(), rect.top(), rect.left(), rect.bottom())
+
+        grid_pen = QPen(self.palette().midlight().color())
+        grid_pen.setStyle(Qt.DashLine)
+        painter.setPen(grid_pen)
+        for i in range(1, 4):
+            y = rect.bottom() - rect.height() * i / 4.0
+            painter.drawLine(rect.left(), int(y), rect.right(), int(y))
+        for i in range(1, 4):
+            x = rect.left() + rect.width() * i / 4.0
+            painter.drawLine(int(x), rect.top(), int(x), rect.bottom())
+
+        text_pen = QPen(self.palette().text().color())
+        painter.setPen(text_pen)
+        font = painter.font()
+        font.setPointSize(max(8, font.pointSize()))
+        painter.setFont(font)
+        for i in range(5):
+            x_value = int(100 * i / 4)
+            y_value = int(100 * i / 4)
+            x_pos = rect.left() + rect.width() * i / 4.0
+            y_pos = rect.bottom() - rect.height() * i / 4.0
+            painter.drawText(int(x_pos) - 8, rect.bottom() + 18, str(x_value))
+            painter.drawText(rect.left() - 30, int(y_pos) + 4, str(y_value))
+
+        self._build_points(rect)
+        if self._points:
+            curve_pen = QPen(QColor(0, 120, 215))
+            curve_pen.setWidth(2)
+            painter.setPen(curve_pen)
+            for i in range(1, len(self._points)):
+                painter.drawLine(self._points[i - 1], self._points[i])
+
+        input_x = self._input_value
+        input_y = self._evaluate(input_x)
+        px = rect.left() + (input_x / 100.0) * rect.width()
+        py = rect.bottom() - (input_y / 100.0) * rect.height()
+        marker_pen = QPen(QColor(220, 0, 0))
+        marker_pen.setWidth(2)
+        painter.setPen(marker_pen)
+        painter.setBrush(QColor(220, 0, 0))
+        r = 4
+        painter.drawEllipse(QPoint(int(px), int(py)), r, r)
+        painter.setPen(text_pen)
+        painter.drawText(int(px) + 6, int(py) - 6, f"{int(input_y)}")
 
 
 class JoystickController(QWidget):
@@ -352,10 +474,78 @@ class ButtonController(QWidget):
         }
 
 
+class ThrottleNonlinearityWidget(GroupHeaderCardWidget):
+    parameters_changed = pyqtSignal(float)
+    preview_changed = pyqtSignal(float, float)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._k = 0.0
+        self._input_value = 50.0
+        self._curve_view = ThrottleCurveView(self)
+        self._curve_view.set_parameters(self._k)
+        self._curve_view.set_input_value(self._input_value)
+        self._curve_view.value_changed.connect(self._on_curve_value_changed)
+        self._init_ui()
+
+    def _init_ui(self):
+        self.setTitle("油门非线性")
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(12)
+
+        main_layout.addWidget(self._curve_view)
+
+        param_layout = QHBoxLayout()
+        param_layout.setSpacing(10)
+        k_label = BodyLabel("非线性强度")
+        self.k_spin = SpinBox()
+        self.k_spin.setRange(-100, 100)
+        self.k_spin.setValue(int(self._k * 100))
+        self.k_spin.valueChanged.connect(self._on_k_changed)
+        param_layout.addWidget(k_label)
+        param_layout.addWidget(self.k_spin)
+        param_layout.addStretch(1)
+
+        input_layout = QHBoxLayout()
+        input_layout.setSpacing(10)
+        input_label = BodyLabel("输入预览")
+        self.input_slider = QSlider(Qt.Horizontal)
+        self.input_slider.setRange(0, 100)
+        self.input_slider.setValue(int(self._input_value))
+        self.input_slider.valueChanged.connect(self._on_input_changed)
+        self.output_label = BodyLabel("输出: 50")
+        input_layout.addWidget(input_label)
+        input_layout.addWidget(self.input_slider)
+        input_layout.addWidget(self.output_label)
+
+        main_layout.addLayout(param_layout)
+        main_layout.addLayout(input_layout)
+        self.setLayout(main_layout)
+
+    def _on_k_changed(self, v: int):
+        self._k = v / 100.0
+        self._curve_view.set_parameters(self._k)
+        self.parameters_changed.emit(self._k)
+        self._curve_view.set_input_value(self._input_value)
+
+    def _on_input_changed(self, v: int):
+        self._input_value = float(v)
+        self._curve_view.set_input_value(self._input_value)
+
+    def _on_curve_value_changed(self, x: float, y: float):
+        self.output_label.setText(f"输出: {int(y)}")
+        self.preview_changed.emit(x, y)
+
+    def get_parameter(self) -> float:
+        return self._k
+
+    def get_output(self, x: float) -> float:
+        return self._curve_view._evaluate(max(0.0, min(100.0, x)))
 
 
 class ControlPanel(GroupHeaderCardWidget):
-    joystick_changed=pyqtSignal(float,float)
+    joystick_changed = pyqtSignal(float, float)
     def __init__(self):
         super().__init__()
         self.initUI()
@@ -396,10 +586,6 @@ class ControlPanel(GroupHeaderCardWidget):
         self.value_label.setText(f"X: {x:.2f}  Y: {y:.2f}")
         self.channelDisp.setJoystickValue(x,y)
         self.joystick_changed.emit(x,y)
-        # 这里可以添加你的控制逻辑
-        # 例如：发送控制命令、更新机器人位置等
-        if abs(x) > 0.1 or abs(y) > 0.1:  # 只有移动超过阈值才处理
-            print(f"摇杆移动: X={x:.2f}, Y={y:.2f}")
 
 
 
@@ -413,7 +599,14 @@ class ControlPanel(GroupHeaderCardWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setFont(QFont("Microsoft YaHei"))  # 确保中文显示
-    window = ControlPanel()
-    window.show()
+    app.setFont(QFont("Microsoft YaHei"))
+    main = QWidget()
+    layout = QVBoxLayout(main)
+    layout.setContentsMargins(16, 16, 16, 16)
+    layout.setSpacing(16)
+    throttle = ThrottleNonlinearityWidget()
+    layout.addWidget(throttle)
+    main.setWindowTitle("油门非线性调节示例")
+    main.resize(600, 400)
+    main.show()
     sys.exit(app.exec_())

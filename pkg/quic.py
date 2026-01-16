@@ -443,21 +443,63 @@ class HighwayQuicClient(QObject):
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
 
+    async def _establish_generic_stream(self, stream_name, message_type, read_task_func=None, need_subscribe=True):
+        """通用的流建立方法，减少重复代码
+        
+        Args:
+            stream_name: 流名称
+            message_type: 消息类型
+            read_task_func: 读取任务函数
+            need_subscribe: 是否需要订阅设备
+        """
+        # 创建流
+        reader_attr = f"{stream_name}_reader"
+        writer_attr = f"{stream_name}_writer"
+        setattr(self, reader_attr, None)
+        setattr(self, writer_attr, None)
+        
+        try:
+            reader, writer = await self.client.create_stream(False)
+            setattr(self, reader_attr, reader)
+            setattr(self, writer_attr, writer)
+            
+            # 创建注册消息
+            register_kwargs = {
+                'device': Device(
+                    id=int(self.setting.device_id),
+                    message_type=message_type
+                )
+            }
+            
+            # 如果需要订阅，添加订阅设备
+            if need_subscribe:
+                register_kwargs['subscribe_device'] = Device(
+                    id=int(self.setting.source_device_id),
+                    message_type=message_type
+                )
+            
+            register_msg = Register(**register_kwargs)
+            
+            # 发送注册消息
+            logging.info(f"send {stream_name} register message {register_msg}")
+            await self.send_message(writer=writer, message=register_msg)
+            
+            # 如果提供了读取任务函数，创建任务
+            if read_task_func:
+                self.create_task(read_task_func(reader))
+                
+            return reader, writer
+            
+        except Exception as e:
+            logging.error(f"Failed to establish {stream_name} stream: {e}")
+            raise
+
     async def establish_imu_stream(self):
-        self.imu_reader,self.imu_writer=await self.client.create_stream(False)
-        register_msg = Register(
-            device=Device(
-                id=int(self.setting.device_id),
-                message_type=Device.MessageType.DEVICEPARAM
-            ),
-            subscribe_device=Device(
-                id=int(self.setting.source_device_id),
-                message_type=Device.MessageType.DEVICEPARAM
-            )
+        await self._establish_generic_stream(
+            stream_name="imu",
+            message_type=Device.MessageType.DEVICEPARAM,
+            read_task_func=self.__read_device_param_stream
         )
-        logging.info(f"send imu register message {register_msg}")
-        await self.send_message(writer=self.imu_writer,message=register_msg)
-        self.create_task(self.__read_device_param_stream(reader=self.imu_reader))
 
     async def __read_device_param_stream(self,reader:asyncio.StreamReader):
         while self.running:
@@ -474,19 +516,10 @@ class HighwayQuicClient(QObject):
                 break
 
     async def establish_file_stream(self):
-        self.file_reader,self.file_writer=await self.client.create_stream(False)
-        register_msg = Register(
-            device=Device(
-                id=int(self.setting.device_id),
-                message_type=Device.MessageType.FILE
-            ),
-            subscribe_device=Device(
-                id=int(self.setting.source_device_id),
-                message_type=Device.MessageType.FILE
-            )
+        await self._establish_generic_stream(
+            stream_name="file",
+            message_type=Device.MessageType.FILE
         )
-        logging.info(f"send file register message {register_msg}")
-        await self.send_message(writer=self.file_writer,message=register_msg)
     
     def send_file(self,filePath):
         if self.running and self.file_writer:
@@ -511,26 +544,18 @@ class HighwayQuicClient(QObject):
 
 
     async def establish_audio_stream(self):
-        self.audio_reader, self.audio_writer = await self.client.create_stream(False)
-        logging.info(f"Audio stream created - Reader: {id(self.audio_reader)}, Writer: {id(self.audio_writer)}")
-        
-        register_msg = Register(
-            device=Device(
-                id=int(self.setting.device_id),
-                message_type=Device.MessageType.AUDIO,
-                # device_type=Device.DeviceType.CONTROLLER
-            ),
-            subscribe_device=Device(
-                id=int(self.setting.source_device_id),
-                message_type=Device.MessageType.AUDIO,
-                # device_type=Device.DeviceType.RECEIVER
-            )
+        reader, writer = await self._establish_generic_stream(
+            stream_name="audio",
+            message_type=Device.MessageType.AUDIO
         )
-        logging.info(f"Audio stream {register_msg} sent successfully, writer state: {self.audio_writer.is_closing()}")
-        await self.send_message(writer=self.audio_writer,message=register_msg)
         
-        self.create_task(self.__read_audio_stream(reader=self.audio_reader))
-        self.create_task(self.__send_audio_stream(writer=self.audio_writer))
+        # 保留音频流特有的额外日志
+        logging.info(f"Audio stream created - Reader: {id(reader)}, Writer: {id(writer)}")
+        logging.info(f"Audio stream sent successfully, writer state: {writer.is_closing()}")
+        
+        # 音频流需要创建两个任务：读取和发送
+        self.create_task(self.__read_audio_stream(reader=reader))
+        self.create_task(self.__send_audio_stream(writer=writer))
         logging.info(f"Audio stream tasks created, total tasks: {len(self.tasks)}")
     
 
@@ -581,41 +606,22 @@ class HighwayQuicClient(QObject):
     
     async def establish_video_stream(self):
         """Establish video stream after connection"""
-        self.video_reader, self.video_writer = await self.client.create_stream(False)
-
-        # Register video stream
-        register_msg = Register(
-            device=Device(
-                id=int(self.setting.device_id),
-                message_type=Device.MessageType.VIDEO
-            ),
-            subscribe_device=Device(
-                id=int(self.setting.source_device_id),
-                message_type=Device.MessageType.VIDEO
-            )
+        await self._establish_generic_stream(
+            stream_name="video",
+            message_type=Device.MessageType.VIDEO
         )
-        logging.info(f"send video register message {register_msg}")
-        await self.send_message(writer=self.video_writer,message=register_msg)
-
+        
+        # 视频流需要启动H264解码器线程
         self.h264_decoder_thread.start()
         self.h265_decoder_thread.start()
         self.create_task(self.__read_video_stream(reader=self.video_reader))
     
     
     async def establish_datagram_stream(self):
-        self.datagram_reader,self.datagram_writer=await self.client.create_stream(False)
-        register_msg = Register(
-            device=Device(
-                id=int(self.setting.device_id),
-                message_type=Device.MessageType.DATAGRAM
-            ),
-            subscribe_device=Device(
-                id=int(self.setting.source_device_id),
-                message_type=Device.MessageType.DATAGRAM
-            )
+        await self._establish_generic_stream(
+            stream_name="datagram",
+            message_type=Device.MessageType.DATAGRAM
         )
-        logging.info(f"send datagram register message {register_msg}")
-        await self.send_message(writer=self.datagram_writer,message=register_msg)
         
 
     def start_test_video_stream(self):
@@ -652,21 +658,15 @@ class HighwayQuicClient(QObject):
     async def establish_ntp_stream(self):
         if self.setting.source_device_id == self.setting.device_id:
             return
-        self.ntp_reader,self.ntp_writer=await self.client.create_stream(False)
-        register_msg = Register(
-            device=Device(
-                id=int(self.setting.device_id),
-                message_type=Device.MessageType.CLOCKSYNCHRONIZATIONPARAM
-            ),
-            subscribe_device=Device(
-                id=int(self.setting.source_device_id),
-                message_type=Device.MessageType.CLOCKSYNCHRONIZATIONPARAM
-            )
+        
+        reader, writer = await self._establish_generic_stream(
+            stream_name="ntp",
+            message_type=Device.MessageType.CLOCKSYNCHRONIZATIONPARAM
         )
-        logging.info(f"send ntp register message {register_msg}")
-        await self.send_message(writer=self.ntp_writer,message=register_msg)
-        self.create_task(self.__send_ntp_message(writer=self.ntp_writer))
-        self.create_task(self.__read_ntp_stream(reader=self.ntp_reader))
+        
+        # NTP流需要创建两个任务：发送和读取
+        self.create_task(self.__send_ntp_message(writer=writer))
+        self.create_task(self.__read_ntp_stream(reader=reader))
 
     async def __send_ntp_message(self,writer:asyncio.StreamWriter):
         while self.running:
@@ -693,31 +693,26 @@ class HighwayQuicClient(QObject):
                 break
 
     async def establish_feedback_stream(self):
-        self.feedback_reader,self.feedback_writer=await self.client.create_stream(False)
-        register_msg = Register(
-            device=Device(
-                id=int(self.setting.device_id),
-                message_type=Device.MessageType.VIDEO_FEEDBACK
-            )
+        await self._establish_generic_stream(
+            stream_name="feedback",
+            message_type=Device.MessageType.VIDEO_FEEDBACK,
+            need_subscribe=False
         )
-        logging.info(f"send feedback register message {register_msg}")
-        await self.send_message(writer=self.feedback_writer,message=register_msg)
     
 
     
     async def establish_control_stream(self):
-        self.control_reader,self.control_writer=await self.client.create_stream(False)
-        # Register control stream
-        register_msg = Register(
-            device=Device(
-                id=int(self.setting.device_id),
-                message_type=Device.MessageType.CONTROL
-            )
+        reader, writer = await self._establish_generic_stream(
+            stream_name="control",
+            message_type=Device.MessageType.CONTROL,
+            need_subscribe=False
         )
-        logging.info(f"send control register message {register_msg}")
-        await self.send_message(writer=self.control_writer,message=register_msg)
-        logging.info(f"Control stream register sent successfully, writer state: {self.control_writer.is_closing()}")
-        self.create_task(self.__send_control_message(writer=self.control_writer))
+        
+        # 保留控制流特有的额外日志
+        logging.info(f"Control stream register sent successfully, writer state: {writer.is_closing()}")
+        
+        # 控制流需要创建发送任务
+        self.create_task(self.__send_control_message(writer=writer))
     
     async def __send_control_message(self,writer:asyncio.StreamWriter):
         try:
@@ -831,14 +826,14 @@ class HighwayQuicClient(QObject):
                 self.h265_decoder_worker.write(video.raw)
             else:
                 self.h264_decoder_worker.write(video.raw)
-            if self.feedback_writer and self.loop:
-                asyncio.create_task(self.send_message(self.feedback_writer, VideoFeedback(received_frame_index=video.frame_id),flush=False))
+            if hasattr(self,"feedback_writer") and self.loop:
+                self.loop.call_soon_threadsafe(self.send_message,self.feedback_writer, VideoFeedback(received_frame_index=video.frame_id),True)  
         
 
             # FIXME 如果传输的数据不是一个完整的NALU的话 会花屏
-            # if video.slice_id == video.slice_count:
-            #     logging.debug("send eof nal")
-            #     self.h264_decoder_worker.write(b"\x00\x00\x00\x01\x09\x00")
+            if video.slice_id == video.slice_count:
+                logging.debug("send eof nal")
+                self.h264_decoder_worker.write(b"\x00\x00\x00\x01\x09\x00")
             self.latency_sum+=int(time.time()*1000)-video.timestamp
             # logging.info("parse datagram frame id ",video.frame_id," latency ",int(time.time()*1000)-video.timestamp,"size",len(video.raw))
             self.latency_count+=1
