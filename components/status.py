@@ -13,9 +13,13 @@ from qfluentwidgets import (
     ComboBox,
     GroupHeaderCardWidget,
     BodyLabel,
+    CaptionLabel,
     ProgressBar,
     SubtitleLabel,
-    CardWidget
+    CardWidget,
+    TableWidget,
+    SimpleCardWidget,
+    isDarkTheme
 )
 
 
@@ -37,7 +41,7 @@ class StatusBar(QWidget):
     def setupUi(self):
         layout=FlowLayout(self,needAni=False)
         layout.setAlignment(Qt.AlignmentFlag.AlignRight)
-        layout.setContentsMargins(10, 5, 10, 5)  # 调整边距
+        layout.setContentsMargins(10, 10, 10, 10)  # 调整边距
         layout.setHorizontalSpacing(15)  # 增加水平间距
         layout.setVerticalSpacing(5)  # 设置垂直间距
         
@@ -137,367 +141,177 @@ class StatusBar(QWidget):
         self.connect_status.setIcon(FluentIcon.CLOUD.icon(color=QColor("red")))
 
 
-
-
-class StatusItem(QWidget):
-    """单个状态项组件"""
-    def __init__(self, label: str, icon: FluentIcon = None, parent=None):
-        super().__init__(parent)
-        self.label_text = label
-        self.icon = icon
-        self.setupUi()
-    
-    def setupUi(self):
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-        
-        # 顶部行：图标和标签
-        top_layout = QHBoxLayout()
-        top_layout.setContentsMargins(0, 0, 0, 0)
-        top_layout.setSpacing(10)
-        
-        if self.icon:
-            try:
-                icon_label = QLabel()
-                # 稍微增大图标
-                icon_label.setPixmap(self.icon.icon().pixmap(20, 20))
-                icon_label.setFixedSize(20, 20)
-                top_layout.addWidget(icon_label)
-            except (AttributeError, TypeError) as e:
-                logging.warning(f"Failed to load icon: {e}")
-        
-        self.label = BodyLabel(self.label_text)
-        top_layout.addWidget(self.label)
-        top_layout.addStretch()
-        
-        layout.addLayout(top_layout)
-        
-        # 中间：值显示
-        self.value_label = BodyLabel("--")
-        self.value_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        layout.addWidget(self.value_label)
-        
-        # 底部：进度条
-        self.progress_container = QWidget()
-        progress_container_layout = QVBoxLayout()
-        progress_container_layout.setContentsMargins(0, 0, 0, 0)
-        
-        self.progress_bar = ProgressBar(useAni=True)
-        self.progress_bar.setFixedHeight(4)  # 更细的进度条
-        progress_container_layout.addWidget(self.progress_bar)
-        
-        self.progress_container.setLayout(progress_container_layout)
-        # 只有在需要时才显示容器，或者保持占位但不可见
-        # 这里我们保持它在布局中，但初始高度可能为0或者隐藏
-        # 为了布局对齐，建议保持固定高度
-        self.progress_container.setFixedHeight(4)
-        layout.addWidget(self.progress_container)
-        
-        self.setLayout(layout)
-    
-    def setValue(self, value: str, progress: Optional[int] = None):
-        """设置值，如果提供 progress，则显示进度条"""
-        self.value_label.setText(value)
-        if progress is not None:
-            self.progress_bar.setValue(progress)
-            self.progress_bar.setVisible(True)
-        else:
-            self.progress_bar.setVisible(False)
-
-
-class SensorDataWidget(QWidget):
-    """传感器数据显示组件（加速度/角速度）"""
-    def __init__(self, title: str, parent=None):
-        super().__init__(parent)
-        self.title = title
-        self.setupUi()
-    
-    def setupUi(self):
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-        
-        # 标题
-        title_label = SubtitleLabel(self.title)
-        layout.addWidget(title_label)
-        
-        # 三个轴的数据 Grid
-        grid_layout = QGridLayout()
-        grid_layout.setHorizontalSpacing(20)
-        grid_layout.setVerticalSpacing(8)
-        
-        # X Axis
-        grid_layout.addWidget(BodyLabel("X"), 0, 0)
-        self.x_label = BodyLabel("--")
-        grid_layout.addWidget(self.x_label, 0, 1)
-        
-        # Y Axis
-        grid_layout.addWidget(BodyLabel("Y"), 1, 0)
-        self.y_label = BodyLabel("--")
-        grid_layout.addWidget(self.y_label, 1, 1)
-        
-        # Z Axis
-        grid_layout.addWidget(BodyLabel("Z"), 2, 0)
-        self.z_label = BodyLabel("--")
-        grid_layout.addWidget(self.z_label, 2, 1)
-        
-        layout.addLayout(grid_layout)
-        self.setLayout(layout)
-    
-    def setValues(self, x: float, y: float, z: float):
-        """设置三个轴的值"""
-        self.x_label.setText(f"{x:.2f}")
-        self.y_label.setText(f"{y:.2f}")
-        self.z_label.setText(f"{z:.2f}")
-
-
-class GPSDataWidget(QWidget):
-    """GPS/经纬度传感器数据显示组件"""
-    def __init__(self, title: str, parent=None):
-        super().__init__(parent)
-        self.title = title
-        self.setupUi()
-    
-    def setupUi(self):
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-        
-        # 标题
-        title_label = SubtitleLabel(self.title)
-        layout.addWidget(title_label)
-        
-        # 经纬度和海拔数据 Grid
-        grid_layout = QGridLayout()
-        grid_layout.setHorizontalSpacing(20)
-        grid_layout.setVerticalSpacing(8)
-        
-        # Latitude
-        grid_layout.addWidget(BodyLabel("纬度"), 0, 0)
-        self.latitude_label = BodyLabel("--")
-        grid_layout.addWidget(self.latitude_label, 0, 1)
-        
-        # Longitude
-        grid_layout.addWidget(BodyLabel("经度"), 1, 0)
-        self.longitude_label = BodyLabel("--")
-        grid_layout.addWidget(self.longitude_label, 1, 1)
-        
-        # Altitude
-        grid_layout.addWidget(BodyLabel("海拔"), 2, 0)
-        self.altitude_label = BodyLabel("--")
-        grid_layout.addWidget(self.altitude_label, 2, 1)
-        
-        layout.addLayout(grid_layout)
-        self.setLayout(layout)
-    
-    def setValues(self, latitude: float, longitude: float, altitude: Optional[float] = None):
-        """设置GPS数据"""
-        self.latitude_label.setText(f"{latitude:.6f}°")
-        self.longitude_label.setText(f"{longitude:.6f}°")
-        if altitude is not None:
-            self.altitude_label.setText(f"{altitude:.2f} m")
-        else:
-            self.altitude_label.setText("--")
-
-
-class SpeedOdometerWidget(QWidget):
-    """时速和里程显示组件"""
-    def __init__(self, title: str, parent=None):
-        super().__init__(parent)
-        self.title = title
-        self.setupUi()
-    
-    def setupUi(self):
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-        
-        # 标题
-        title_label = SubtitleLabel(self.title)
-        layout.addWidget(title_label)
-        
-        # 时速和里程数据 Grid
-        grid_layout = QGridLayout()
-        grid_layout.setHorizontalSpacing(20)
-        grid_layout.setVerticalSpacing(8)
-        
-        # Speed
-        grid_layout.addWidget(BodyLabel("时速"), 0, 0)
-        self.speed_label = BodyLabel("--")
-        grid_layout.addWidget(self.speed_label, 0, 1)
-        
-        # Odometer
-        grid_layout.addWidget(BodyLabel("里程"), 1, 0)
-        self.odometer_label = BodyLabel("--")
-        grid_layout.addWidget(self.odometer_label, 1, 1)
-        
-        layout.addLayout(grid_layout)
-        self.setLayout(layout)
-    
-    def setValues(self, speed: float, odometer: float):
-        """设置时速和里程数据"""
-        self.speed_label.setText(f"{speed:.2f} km/h")
-        self.odometer_label.setText(f"{odometer:.2f} km")
-
-
 class StatusPanel(GroupHeaderCardWidget):
+    """系统状态面板 - 使用 qfluentwidgets 组件的紧凑版"""
     def __init__(self):
         super().__init__()
+        self._value_labels = {}  # 存储值标签的引用
         self.initUI()
-    
+
     def initUI(self):
         self.setTitle("系统状态")
         self.setupUi()
-    
+
+    def _create_row(self, items: list) -> QHBoxLayout:
+        """创建一行数据，items: [(label, key), ...]"""
+        row = QHBoxLayout()
+        row.setSpacing(4)
+        row.setContentsMargins(10, 0, 10, 0)
+
+        for i, (label_text, key, default_value) in enumerate(items):
+            if i > 0:
+                row.addSpacing(12)
+
+            # 标签 (使用 CaptionLabel，颜色较淡)
+            label = CaptionLabel(label_text)
+            label.setFixedWidth(36)
+            row.addWidget(label)
+
+            # 值 (使用 BodyLabel)
+            value_label = BodyLabel(default_value)
+            value_label.setFixedWidth(70)
+            row.addWidget(value_label)
+
+            # 保存引用
+            self._value_labels[key] = value_label
+
+        row.addStretch()
+        return row
+
     def setupUi(self):
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(24, 24, 24, 24)
-        main_layout.setSpacing(24)
-        
-        # 主要状态网格 (3列布局)
-        status_grid = QGridLayout()
-        status_grid.setSpacing(20)
-        
-        # 1. CPU
-        self.cpu_item = StatusItem("CPU 利用率", FluentIcon.DEVELOPER_TOOLS)
-        self.cpu_item.setValue("0%", 0)
-        status_grid.addWidget(self.cpu_item, 0, 0)
-        
-        # 2. Memory
-        self.memory_item = StatusItem("内存利用率", FluentIcon.SETTING)
-        self.memory_item.setValue("0%", 0)
-        status_grid.addWidget(self.memory_item, 0, 1)
-        
-        # 3. Disk
-        self.disk_item = StatusItem("磁盘使用", FluentIcon.SETTING)
-        self.disk_item.setValue("0%", 0)
-        status_grid.addWidget(self.disk_item, 0, 2)
-        
-        # 4. Signal
-        self.signal_item = StatusItem("信号强度", FluentIcon.WIFI)
-        self.signal_item.setValue("0%", 0)
-        status_grid.addWidget(self.signal_item, 1, 0)
-        
-        # 5. Latency
-        self.latency_item = StatusItem("网络延迟", FluentIcon.WIFI)
-        self.latency_item.setValue("-- ms")
-        status_grid.addWidget(self.latency_item, 1, 1)
-        
-        # 6. Uptime
-        self.uptime_item = StatusItem("运行时间", FluentIcon.DATE_TIME)
-        self.uptime_item.setValue("00:00:00")
-        status_grid.addWidget(self.uptime_item, 1, 2)
-        
-        # 7. Battery Voltage
-        self.battery_voltage_item = StatusItem("电池电压", None)
-        self.battery_voltage_item.setValue("0.0 V")
-        status_grid.addWidget(self.battery_voltage_item, 2, 0)
-        
-        # 8. Battery Capacity
-        self.battery_capacity_item = StatusItem("电池容量", None)
-        self.battery_capacity_item.setValue("0%", 0)
-        status_grid.addWidget(self.battery_capacity_item, 2, 1)
-        
-        # 9. Temperature
-        self.temperature_item = StatusItem("系统温度", None)
-        self.temperature_item.setValue("--°C")
-        status_grid.addWidget(self.temperature_item, 2, 2)
-        
-        main_layout.addLayout(status_grid)
-        
-        # 传感器数据部分
-        sensors_title = SubtitleLabel("传感器数据")
-        main_layout.addWidget(sensors_title)
-        
-        # 传感器网格 (2列布局)
-        sensors_grid = QGridLayout()
-        sensors_grid.setSpacing(20)
-        
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(6)
+
+        # 系统状态 - 每行2-3个数据
+        # 第1行: CPU, 内存, 磁盘
+        row1 = self._create_row([
+            ("CPU", "cpu", "0%"),
+            ("内存", "memory", "0%"),
+            ("磁盘", "disk", "0%"),
+        ])
+        main_layout.addLayout(row1)
+
+        # 第2行: 信号, 延迟, 运行
+        row2 = self._create_row([
+            ("信号", "signal", "0%"),
+            ("延迟", "latency", "--"),
+            ("运行", "uptime", "00:00:00"),
+        ])
+        main_layout.addLayout(row2)
+
+        # 第3行: 电压, 电量, 温度
+        row3 = self._create_row([
+            ("电压", "voltage", "0.0V"),
+            ("电量", "capacity", "0%"),
+            ("温度", "temp", "--"),
+        ])
+        main_layout.addLayout(row3)
+
+        # 分隔线
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFixedHeight(1)
+        main_layout.addWidget(line)
+
+        # 传感器数据
         # 加速度
-        self.acceleration_widget = SensorDataWidget("加速度 (m/s²)")
-        sensors_grid.addWidget(self.acceleration_widget, 0, 0)
-        
+        accel_row = QHBoxLayout()
+        accel_row.setSpacing(4)
+        accel_row.setContentsMargins(10,0,10,0)
+        accel_label = CaptionLabel("加速度")
+        accel_label.setFixedWidth(48)
+        accel_row.addWidget(accel_label)
+        self._value_labels["accel"] = BodyLabel("X:-- Y:-- Z:--")
+        accel_row.addWidget(self._value_labels["accel"])
+        accel_row.addStretch()
+        main_layout.addLayout(accel_row)
+
         # 角速度
-        self.angular_velocity_widget = SensorDataWidget("角速度 (rad/s)")
-        sensors_grid.addWidget(self.angular_velocity_widget, 0, 1)
-        
+        gyro_row = QHBoxLayout()
+        gyro_row.setSpacing(4)
+        gyro_row.setContentsMargins(10,0,10,0)
+        gyro_label = CaptionLabel("角速度")
+        gyro_label.setFixedWidth(48)
+        gyro_row.addWidget(gyro_label)
+        self._value_labels["gyro"] = BodyLabel("X:-- Y:-- Z:--")
+        gyro_row.addWidget(self._value_labels["gyro"])
+        gyro_row.addStretch()
+        main_layout.addLayout(gyro_row)
+
         # GPS
-        self.gps_widget = GPSDataWidget("GPS 位置")
-        sensors_grid.addWidget(self.gps_widget, 1, 0)
-        
-        # Speed/Odometer
-        self.speed_odometer_widget = SpeedOdometerWidget("速度里程")
-        sensors_grid.addWidget(self.speed_odometer_widget, 1, 1)
-        
-        main_layout.addLayout(sensors_grid)
-        
-        # 添加弹性空间
-        main_layout.addStretch()
-        
+        gps_row = QHBoxLayout()
+        gps_row.setSpacing(4)
+        gps_row.setContentsMargins(10,0,10,0)
+        gps_label = CaptionLabel("GPS")
+        gps_label.setFixedWidth(48)
+        gps_row.addWidget(gps_label)
+        self._value_labels["gps"] = BodyLabel("--")
+        gps_row.addWidget(self._value_labels["gps"])
+        gps_row.addStretch()
+        main_layout.addLayout(gps_row)
+
+        # 速度/里程
+        speed_row = QHBoxLayout()
+        speed_row.setSpacing(4)
+        speed_row.setContentsMargins(10,0,10,0)
+        speed_label = CaptionLabel("速度")
+        speed_label.setFixedWidth(48)
+        speed_row.addWidget(speed_label)
+        self._value_labels["speed"] = BodyLabel("--")
+        speed_row.addWidget(self._value_labels["speed"])
+        speed_row.addStretch()
+        main_layout.addLayout(speed_row)
+
         self.vBoxLayout.addLayout(main_layout)
-    
-    # 以下方法用于更新数据（暂时只搭建界面，数据更新逻辑后续实现）
+
+    def _update_value(self, key: str, value: str):
+        """更新指定key的值"""
+        if key in self._value_labels:
+            self._value_labels[key].setText(value)
+
+    # 更新方法
     def update_cpu(self, usage: float):
-        """更新 CPU 利用率 (0-100)"""
-        self.cpu_item.setValue(f"{usage:.1f}%", int(usage))
-    
+        self._update_value('cpu', f"{usage:.1f}%")
+
     def update_memory(self, usage: float):
-        """更新内存利用率 (0-100)"""
-        self.memory_item.setValue(f"{usage:.1f}%", int(usage))
-    
+        self._update_value('memory', f"{usage:.1f}%")
+
     def update_signal_strength(self, strength: float):
-        """更新信号强度 (0-100)"""
-        self.signal_item.setValue(f"{strength:.1f}%", int(strength))
-    
+        self._update_value('signal', f"{strength:.0f}%")
+
     def update_battery_voltage(self, voltage: float):
-        """更新电池电压 (V)"""
-        self.battery_voltage_item.setValue(f"{voltage:.2f} V")
-    
+        self._update_value('voltage', f"{voltage:.1f}V")
+
     def update_battery_capacity(self, capacity: float):
-        """更新电池容量 (0-100)"""
-        self.battery_capacity_item.setValue(f"{capacity:.1f}%", int(capacity))
-    
-    def update_acceleration(self, x: float, y: float, z: float):
-        """更新加速度数据 (m/s²)"""
-        self.acceleration_widget.setValues(x, y, z)
-    
-    def update_angular_velocity(self, x: float, y: float, z: float):
-        """更新角速度数据 (rad/s)"""
-        self.angular_velocity_widget.setValues(x, y, z)
-    
+        self._update_value('capacity', f"{capacity:.0f}%")
+
     def update_temperature(self, temp: float):
-        """更新系统温度 (°C)"""
-        self.temperature_item.setValue(f"{temp:.1f}°C")
-    
+        self._update_value('temp', f"{temp:.1f}C")
+
     def update_latency(self, latency: int):
-        """更新网络延迟 (ms)"""
-        self.latency_item.setValue(f"{latency} ms")
-    
+        self._update_value('latency', f"{latency}ms")
+
     def update_uptime(self, hours: int, minutes: int, seconds: int):
-        """更新运行时间"""
-        self.uptime_item.setValue(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
-    
+        self._update_value('uptime', f"{hours:02d}:{minutes:02d}:{seconds:02d}")
+
     def update_disk_usage(self, usage: float):
-        """更新磁盘使用率 (0-100)"""
-        self.disk_item.setValue(f"{usage:.1f}%", int(usage))
-    
+        self._update_value('disk', f"{usage:.1f}%")
+
+    def update_acceleration(self, x: float, y: float, z: float):
+        self._update_value('accel', f"X:{x:.1f} Y:{y:.1f} Z:{z:.1f}")
+
+    def update_angular_velocity(self, x: float, y: float, z: float):
+        self._update_value('gyro', f"X:{x:.1f} Y:{y:.1f} Z:{z:.1f}")
+
     def update_gps(self, latitude: float, longitude: float, altitude: Optional[float] = None):
-        """更新GPS/经纬度数据
-        Args:
-            latitude: 纬度（度）
-            longitude: 经度（度）
-            altitude: 海拔（米），可选
-        """
-        self.gps_widget.setValues(latitude, longitude, altitude)
-    
+        if altitude is not None:
+            self._update_value('gps', f"{latitude:.4f}, {longitude:.4f}, {altitude:.0f}m")
+        else:
+            self._update_value('gps', f"{latitude:.4f}, {longitude:.4f}")
+
     def update_speed_odometer(self, speed: float, odometer: float):
-        """更新时速和里程数据
-        Args:
-            speed: 时速（km/h）
-            odometer: 里程（km）
-        """
-        self.speed_odometer_widget.setValues(speed, odometer)
+        self._update_value('speed', f"{speed:.1f}km/h | {odometer:.1f}km")
 
 
 

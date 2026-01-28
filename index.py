@@ -13,7 +13,6 @@ from qfluentwidgets.window import FluentWindow
 
 from loader import SplashScreen
 from pkg.api import API
-from pkg.metric import *
 from pkg.model import HIDBody, Setting
 from pkg.mqtt import MQTTClient
 from pkg.quic import HighwayQuicClient
@@ -114,7 +113,11 @@ class MainWindow(FluentWindow):
         self.monitor.sendTestCodecSignal.connect(self.debug_monitor.show)
         
         self.monitor.param_changed.connect(self.__handle_param_changed)
-        
+
+        # 连接设备选择信号：当选择模拟摇杆时激活 ControlPanel 中的摇杆
+        self.controller.detector.virtual_joystick_selected.connect(
+            self.monitor.controlPanel.setJoystickActive
+        )
 
         self.settingView.hid_response.connect(self._handle_hid_response)
         

@@ -68,7 +68,25 @@ class Monitor(QWidget):
 
         # self.channelGroup=ChannelGroup(self.setting.channel_count,self.setting.channels,showFineTune=False,showReverse=False)
         self.statusPanel=StatusPanel()
-        
+
+        # 设置右侧面板宽度一致
+        panel_width = 350
+        self.controlPanel.setFixedWidth(panel_width)
+        self.statusPanel.setFixedWidth(panel_width)
+
+        # 右侧面板：实时控制 + 系统状态 在同一列
+        right_panel = QWidget()
+        right_panel.setFixedWidth(panel_width)
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(10)
+        right_layout.addWidget(self.statusPanel)
+        right_layout.addWidget(self.controlPanel)
+        right_layout.addStretch()
+
+        # 设置右侧面板不随窗口放大而扩展
+        right_panel.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+
         hlayout=QHBoxLayout()
 
         self.waveform.setMinimumWidth(200)
@@ -79,8 +97,10 @@ class Monitor(QWidget):
         main_layout.addWidget(self.display,1,0,2,1)
         # main_layout.addLayout(hlayout,2,0)
         main_layout.addLayout(buttonLayout,3,0)
-        main_layout.addWidget(self.controlPanel,1,1,1,1)
-        main_layout.addWidget(self.statusPanel,1,2,1,1)
+        main_layout.addWidget(right_panel,1,1,2,1, Qt.AlignTop)
+        # 设置列拉伸因子：第0列（视频区域）可以拉伸，第1列（右侧面板）不拉伸
+        main_layout.setColumnStretch(0, 1)
+        main_layout.setColumnStretch(1, 0)
         # main_layout.addWidget(self.channelGroup,1,2,2,1)
         self.setLayout(main_layout)
         

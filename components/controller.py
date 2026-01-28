@@ -30,119 +30,17 @@ if __name__ == "__main__" and __package__ is None:
 from components.channel import ChannelDisp
 
 
-class ThrottleCurveView(QWidget):
-    value_changed = pyqtSignal(float, float)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._k = 0.0
-        self._input_value = 50.0
-        self._points = []
-        self.setMinimumHeight(220)
-
-    def set_parameters(self, k: float):
-        self._k = max(-1.0, min(1.0, k))
-        self.update()
-
-    def set_input_value(self, value: float):
-        self._input_value = max(0.0, min(100.0, value))
-        y = self._evaluate(self._input_value)
-        self.value_changed.emit(self._input_value, y)
-        self.update()
-
-    def _evaluate(self, x: float) -> float:
-        t = x / 100.0
-        k = self._k
-        y = (1.0 - k) * t + k * (t * t * t)
-        return max(0.0, min(1.0, y)) * 100.0
-
-    def _build_points(self, rect):
-        left = rect.left()
-        right = rect.right()
-        top = rect.top()
-        bottom = rect.bottom()
-        width = max(1.0, right - left)
-        height = max(1.0, bottom - top)
-        pts = []
-        for i in range(101):
-            x = i
-            y = self._evaluate(x)
-            px = left + (x / 100.0) * width
-            py = bottom - (y / 100.0) * height
-            pts.append(QPoint(int(px), int(py)))
-        self._points = pts
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        rect = self.rect().adjusted(40, 10, -20, -30)
-        if rect.width() <= 0 or rect.height() <= 0:
-            return
-
-        painter.fillRect(self.rect(), self.palette().window())
-
-        axis_pen = QPen(self.palette().mid().color())
-        axis_pen.setWidth(1)
-        painter.setPen(axis_pen)
-        painter.drawLine(rect.left(), rect.bottom(), rect.right(), rect.bottom())
-        painter.drawLine(rect.left(), rect.top(), rect.left(), rect.bottom())
-
-        grid_pen = QPen(self.palette().midlight().color())
-        grid_pen.setStyle(Qt.DashLine)
-        painter.setPen(grid_pen)
-        for i in range(1, 4):
-            y = rect.bottom() - rect.height() * i / 4.0
-            painter.drawLine(rect.left(), int(y), rect.right(), int(y))
-        for i in range(1, 4):
-            x = rect.left() + rect.width() * i / 4.0
-            painter.drawLine(int(x), rect.top(), int(x), rect.bottom())
-
-        text_pen = QPen(self.palette().text().color())
-        painter.setPen(text_pen)
-        font = painter.font()
-        font.setPointSize(max(8, font.pointSize()))
-        painter.setFont(font)
-        for i in range(5):
-            x_value = int(100 * i / 4)
-            y_value = int(100 * i / 4)
-            x_pos = rect.left() + rect.width() * i / 4.0
-            y_pos = rect.bottom() - rect.height() * i / 4.0
-            painter.drawText(int(x_pos) - 8, rect.bottom() + 18, str(x_value))
-            painter.drawText(rect.left() - 30, int(y_pos) + 4, str(y_value))
-
-        self._build_points(rect)
-        if self._points:
-            curve_pen = QPen(QColor(0, 120, 215))
-            curve_pen.setWidth(2)
-            painter.setPen(curve_pen)
-            for i in range(1, len(self._points)):
-                painter.drawLine(self._points[i - 1], self._points[i])
-
-        input_x = self._input_value
-        input_y = self._evaluate(input_x)
-        px = rect.left() + (input_x / 100.0) * rect.width()
-        py = rect.bottom() - (input_y / 100.0) * rect.height()
-        marker_pen = QPen(QColor(220, 0, 0))
-        marker_pen.setWidth(2)
-        painter.setPen(marker_pen)
-        painter.setBrush(QColor(220, 0, 0))
-        r = 4
-        painter.drawEllipse(QPoint(int(px), int(py)), r, r)
-        painter.setPen(text_pen)
-        painter.drawText(int(px) + 6, int(py) - 6, f"{int(input_y)}")
-
-
 class JoystickController(QWidget):
     """模拟摇杆组件 - 提供X/Y坐标输出和视觉反馈"""
-    
+
     # 信号定义：摇杆位置变化时发出信号
     position_changed = pyqtSignal(float, float)  # x, y 坐标 (-1.0 到 1.0)
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumSize(200, 200)
         self.setAttribute(Qt.WA_TranslucentBackground)
-       
+
         # 摇杆状态
         self._center_pos = QPoint(0, 0)  # 相对中心的偏移量
         # 创建动画使回到中心更平滑
@@ -150,15 +48,34 @@ class JoystickController(QWidget):
         self.animation.setDuration(200)  # 动画时长200ms
         self.animation.setEndValue(QPoint(0, 0))  # 目标位置：中心
         self.animation.setEasingCurve(QEasingCurve.OutBack)  # 缓动曲线，有回弹效果
-        
+
         self.is_dragging = False         # 是否正在拖动
         self.outer_radius = 0            # 外圆半径（动态计算）
         self.inner_radius = 0            # 内圆半径（动态计算）
         self.max_distance = 0            # 最大拖动距离
-        
+
         # 摇杆数值 (-1.0 到 1.0)
         self._x_value = 0.0
         self._y_value = 0.0
+
+        # 激活状态
+        self._active = True
+
+    def setActive(self, active: bool):
+        """设置摇杆激活状态"""
+        self._active = active
+        if not active:
+            # 未激活时重置位置
+            self._center_pos = QPoint(0, 0)
+            self._x_value = 0.0
+            self._y_value = 0.0
+            self.is_dragging = False
+            self.setCursor(Qt.ArrowCursor)
+        self.update()
+
+    def isActive(self) -> bool:
+        """获取摇杆激活状态"""
+        return self._active
 
     def resizeEvent(self, event):
         """窗口大小变化时重新计算半径"""
@@ -170,11 +87,68 @@ class JoystickController(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)  # 抗锯齿
-        
+
         # 计算控件中心坐标
         center_x = self.width() // 2
         center_y = self.height() // 2
 
+        # 未激活状态使用灰色调
+        if not self._active:
+            # 1. 绘制外圆环背景（灰色）
+            painter.setPen(Qt.NoPen)
+            gradient = QRadialGradient(center_x, center_y, self.outer_radius)
+            gradient.setColorAt(0, QColor(50, 50, 50, 80))
+            gradient.setColorAt(1, QColor(30, 30, 30, 100))
+            painter.setBrush(QBrush(gradient))
+            painter.drawEllipse(
+                center_x - self.outer_radius,
+                center_y - self.outer_radius,
+                self.outer_radius * 2,
+                self.outer_radius * 2
+            )
+
+            # 2. 绘制外圆环边框（灰色）
+            pen = QPen(QColor(70, 70, 70), 2)
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawEllipse(
+                center_x - self.outer_radius,
+                center_y - self.outer_radius,
+                self.outer_radius * 2,
+                self.outer_radius * 2
+            )
+
+            # 3. 绘制摇杆内圈（灰色）
+            knob_x = center_x
+            knob_y = center_y
+
+            knob_gradient = QRadialGradient(knob_x, knob_y, self.inner_radius)
+            knob_gradient.setColorAt(0, QColor(100, 100, 100))
+            knob_gradient.setColorAt(0.7, QColor(80, 80, 80))
+            knob_gradient.setColorAt(1, QColor(60, 60, 60))
+
+            painter.setBrush(QBrush(knob_gradient))
+            painter.setPen(QPen(QColor(50, 50, 50), 1))
+            painter.drawEllipse(
+                knob_x - self.inner_radius,
+                knob_y - self.inner_radius,
+                self.inner_radius * 2,
+                self.inner_radius * 2
+            )
+
+            # 4. 绘制中心点（灰色）
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QBrush(QColor(150, 150, 150, 100)))
+            center_dot_radius = 3
+            painter.drawEllipse(
+                knob_x - center_dot_radius,
+                knob_y - center_dot_radius,
+                center_dot_radius * 2,
+                center_dot_radius * 2
+            )
+            return
+
+        # 激活状态 - 正常绘制
         # 1. 绘制外圆环背景（深色背景）
         painter.setPen(Qt.NoPen)
         gradient = QRadialGradient(center_x, center_y, self.outer_radius)
@@ -251,6 +225,8 @@ class JoystickController(QWidget):
 
     def mousePressEvent(self, event):
         """鼠标按下时判断是否点击在摇杆范围内"""
+        if not self._active:
+            return
         if event.button() == Qt.LeftButton:
             # 计算鼠标相对控件中心的位置
             center_x = self.width() // 2
@@ -268,6 +244,8 @@ class JoystickController(QWidget):
 
     def mouseMoveEvent(self, event):
         """鼠标拖动时更新摇杆位置"""
+        if not self._active:
+            return
         if self.is_dragging:
             # 计算鼠标相对控件中心的偏移
             center_x = self.width() // 2
@@ -279,6 +257,8 @@ class JoystickController(QWidget):
 
     def mouseReleaseEvent(self, event):
         """鼠标松开时返回原点（带动画）"""
+        if not self._active:
+            return
         if event.button() == Qt.LeftButton and self.is_dragging:
             print("mouseReleaseEvent")
             self.is_dragging = False
@@ -474,76 +454,6 @@ class ButtonController(QWidget):
         }
 
 
-class ThrottleNonlinearityWidget(GroupHeaderCardWidget):
-    parameters_changed = pyqtSignal(float)
-    preview_changed = pyqtSignal(float, float)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._k = 0.0
-        self._input_value = 50.0
-        self._curve_view = ThrottleCurveView(self)
-        self._curve_view.set_parameters(self._k)
-        self._curve_view.set_input_value(self._input_value)
-        self._curve_view.value_changed.connect(self._on_curve_value_changed)
-        self._init_ui()
-
-    def _init_ui(self):
-        self.setTitle("油门非线性")
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(12)
-
-        main_layout.addWidget(self._curve_view)
-
-        param_layout = QHBoxLayout()
-        param_layout.setSpacing(10)
-        k_label = BodyLabel("非线性强度")
-        self.k_spin = SpinBox()
-        self.k_spin.setRange(-100, 100)
-        self.k_spin.setValue(int(self._k * 100))
-        self.k_spin.valueChanged.connect(self._on_k_changed)
-        param_layout.addWidget(k_label)
-        param_layout.addWidget(self.k_spin)
-        param_layout.addStretch(1)
-
-        input_layout = QHBoxLayout()
-        input_layout.setSpacing(10)
-        input_label = BodyLabel("输入预览")
-        self.input_slider = QSlider(Qt.Horizontal)
-        self.input_slider.setRange(0, 100)
-        self.input_slider.setValue(int(self._input_value))
-        self.input_slider.valueChanged.connect(self._on_input_changed)
-        self.output_label = BodyLabel("输出: 50")
-        input_layout.addWidget(input_label)
-        input_layout.addWidget(self.input_slider)
-        input_layout.addWidget(self.output_label)
-
-        main_layout.addLayout(param_layout)
-        main_layout.addLayout(input_layout)
-        self.setLayout(main_layout)
-
-    def _on_k_changed(self, v: int):
-        self._k = v / 100.0
-        self._curve_view.set_parameters(self._k)
-        self.parameters_changed.emit(self._k)
-        self._curve_view.set_input_value(self._input_value)
-
-    def _on_input_changed(self, v: int):
-        self._input_value = float(v)
-        self._curve_view.set_input_value(self._input_value)
-
-    def _on_curve_value_changed(self, x: float, y: float):
-        self.output_label.setText(f"输出: {int(y)}")
-        self.preview_changed.emit(x, y)
-
-    def get_parameter(self) -> float:
-        return self._k
-
-    def get_output(self, x: float) -> float:
-        return self._curve_view._evaluate(max(0.0, min(100.0, x)))
-
-
 class ControlPanel(GroupHeaderCardWidget):
     joystick_changed = pyqtSignal(float, float)
     def __init__(self):
@@ -561,7 +471,7 @@ class ControlPanel(GroupHeaderCardWidget):
         # 圆形控制区（居中显示）
         joystick_layout = QVBoxLayout()
         joystick_layout.setAlignment(Qt.AlignCenter)
-        
+
         # 摇杆组件
         self.joystick = JoystickController()
         joystick_layout.addWidget(self.joystick, alignment=Qt.AlignCenter)
@@ -573,13 +483,17 @@ class ControlPanel(GroupHeaderCardWidget):
         self.value_label.setAlignment(Qt.AlignCenter)
         self.value_label.setStyleSheet("color: #ffffff; background-color: rgba(0, 0, 0, 100); padding: 8px; border-radius: 8px;")
         joystick_layout.addWidget(self.value_label, alignment=Qt.AlignCenter)
-        
+
         # 连接摇杆信号
         self.joystick.position_changed.connect(self.on_joystick_changed)
-        
-        main_layout.addLayout(joystick_layout)    
+
+        main_layout.addLayout(joystick_layout)
         main_layout.addStretch(1)
         self.vBoxLayout.addLayout(main_layout)
+
+    def setJoystickActive(self, active: bool):
+        """设置摇杆激活状态"""
+        self.joystick.setActive(active)
 
     def on_joystick_changed(self, x, y):
         """摇杆位置变化回调"""
@@ -597,16 +511,3 @@ class ControlPanel(GroupHeaderCardWidget):
         self.move(qr.topLeft())
 
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    app.setFont(QFont("Microsoft YaHei"))
-    main = QWidget()
-    layout = QVBoxLayout(main)
-    layout.setContentsMargins(16, 16, 16, 16)
-    layout.setSpacing(16)
-    throttle = ThrottleNonlinearityWidget()
-    layout.addWidget(throttle)
-    main.setWindowTitle("油门非线性调节示例")
-    main.resize(600, 400)
-    main.show()
-    sys.exit(app.exec_())

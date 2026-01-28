@@ -91,13 +91,18 @@ class ChannelGroup(QWidget):
     channelValueChanged=pyqtSignal(int,int)
 
     def setupUi(self):
-        layout=QVBoxLayout()
+        layout=QGridLayout()
+        layout.setSpacing(8)
+        layout.setContentsMargins(0, 0, 0, 0)
         self.channels=[Channel(showFineTune=self.showFineTune,showReverse=self.showReverse) for _ in range(self.channelCount)]
         for idx,channel in enumerate[Channel](self.channels):
             channel.setLabel(f"{self.prefix}{idx+1}")
             channel.setFineTune(self.fineTunes[idx] if idx<len(self.fineTunes) else 0)
             channel.valueChanged.connect(lambda value: self.channelValueChanged.emit(idx,value))
-            layout.addWidget(channel)
+            # 每行两列：row = idx // 2, col = idx % 2
+            row = idx // 2
+            col = idx % 2
+            layout.addWidget(channel, row, col)
         self.setLayout(layout)
 
     def __init__(self,channelCount:int=10,fineTunes:list[int]=[0]*10,prefix:str="通道",showFineTune:bool=True,showReverse:bool=True) -> None:
@@ -129,13 +134,15 @@ class ChannelGroup(QWidget):
 class Detector(QWidget):
     signal=pyqtSignal(list) # (channel,value)
     loading=pyqtSignal(str)
+    # 新增信号：当选择模拟摇杆时为True，否则为False
+    virtual_joystick_selected = pyqtSignal(bool)
 
     def __init__(self) -> None:
         super().__init__()
         self.setupUi()
-        self.deviceMap:dict[Any, Any]=dict[Any, Any]()      
+        self.deviceMap:dict[Any, Any]=dict[Any, Any]()
         self.joystick=JoyStick()
-        
+
         # 延迟导入 JoystickController 以避免循环导入
         from components.controller import JoystickController
         self.virtual_joystick=JoystickController()
@@ -162,7 +169,7 @@ class Detector(QWidget):
         device=self.deviceMap.get(idx)
         if device is None:
             return
-        
+
         # 断开当前物理摇杆设备的信号连接（如果有）
         if hasattr(self, "joystick") and hasattr(self.joystick, "signal"):
             try:
@@ -170,10 +177,14 @@ class Detector(QWidget):
             except TypeError:
                 # 如果没有连接，忽略错误
                 pass
-        
+
         # 设置当前设备类型
         self.current_device_type = device["type"]
-        
+
+        # 发出虚拟摇杆选择状态信号
+        is_virtual = device["type"] == "virtual_joystick"
+        self.virtual_joystick_selected.emit(is_virtual)
+
         # 连接新设备的信号
         if device["type"] == "virtual_joystick":
             # 虚拟摇杆已经在初始化时连接了信号，只需要标记当前设备类型
