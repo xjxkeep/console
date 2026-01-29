@@ -1,4 +1,5 @@
 import logging
+import os
 from PyQt5 import QtGui
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -90,25 +91,44 @@ class FastVideoPlayer(QWidget):
         super().__init__(*args,**kwargs)
         self.fps=0
         self.current_image = None  # 保存当前要显示的图像
+        self.placeholder_image = None  # 占位图像
         self.timer=QTimer(self)
         self.timer.setInterval(1000)
         self.timer.timeout.connect(self.update_fps)
         self.timer.start()
         self.setupUi()
+        self._load_placeholder()
+
+    def _load_placeholder(self):
+        """加载占位图像"""
+        # 获取项目根目录
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        placeholder_path = os.path.join(base_dir, "assets/images/background.png")
+        if os.path.exists(placeholder_path):
+            self.placeholder_image = QtGui.QImage(placeholder_path)
+            logging.info(f"Loaded placeholder image: {placeholder_path}")
+        else:
+            logging.warning(f"Placeholder image not found: {placeholder_path}")
+
     def setupUi(self):
         # self.setFixedSize(200,200)
         self.setObjectName("Player")
         self.setSizePolicy(QSizePolicy.Expanding,QSizePolicy.Expanding)
         self.setStyleSheet("background-color: rgb(0,0,0);color: rgb(255,255,255);")
-    
+
     def paintEvent(self, event):
         """重写 paintEvent，在这里绘制图像"""
-        if self.current_image is not None:
-            painter = QtGui.QPainter(self)
-            rect=self.rect()
+        painter = QtGui.QPainter(self)
+        painter.setRenderHint(QtGui.QPainter.SmoothPixmapTransform)
+        rect = self.rect()
+
+        # 选择要显示的图像：优先显示视频帧，否则显示占位图
+        image_to_draw = self.current_image if self.current_image is not None else self.placeholder_image
+
+        if image_to_draw is not None:
             # 调整 rect 使得图像长宽比例不变的情况下 图像居中
-            img_width = self.current_image.width()
-            img_height = self.current_image.height()
+            img_width = image_to_draw.width()
+            img_height = image_to_draw.height()
             wnd_width = rect.width()
             wnd_height = rect.height()
 
@@ -129,13 +149,18 @@ class FastVideoPlayer(QWidget):
                 y = rect.y() + (wnd_height - scaled_height) // 2
 
                 target_rect = QtCore.QRect(x, y, scaled_width, scaled_height)
-                painter.drawImage(target_rect, self.current_image)
+                painter.drawImage(target_rect, image_to_draw)
                 painter.end()
                 return
-            painter.drawImage(self.rect(), self.current_image)
+            painter.drawImage(self.rect(), image_to_draw)
             painter.end()
         else:
-            super().paintEvent(event)
+            # 没有图像时显示文字提示
+            painter.fillRect(rect, QtGui.QColor(0, 0, 0))
+            painter.setPen(QtGui.QColor(255, 255, 255))
+            painter.setFont(QtGui.QFont("Arial", 14))
+            painter.drawText(rect, Qt.AlignCenter, "无信号，等待连接...")
+            painter.end()
    
     def setImage(self,image:QtGui.QImage)->None:
         """设置要显示的图像"""

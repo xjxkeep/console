@@ -46,13 +46,13 @@ class StatusBar(QWidget):
         layout.setVerticalSpacing(5)  # 设置垂直间距
         
         # 创建组件并设置统一的样式
-        self.signal=TransparentPushButton(FluentIcon.WIFI.icon(color=QColor("#4CAF50")),"10 ms")
+        self.signal=TransparentPushButton(FluentIcon.WIFI.icon(color=QColor("#4CAF50")),"- ms")
         self.signal.setMinimumWidth(80)
         
-        self.upload=TransparentPushButton(FluentIcon.UP.icon(color=QColor("#2196F3")),"100 kb/s")
+        self.upload=TransparentPushButton(FluentIcon.UP.icon(color=QColor("#2196F3")),"- kb/s")
         self.upload.setMinimumWidth(100)
         
-        self.download=TransparentPushButton(FluentIcon.DOWN.icon(color=QColor("#FF9800")),"99 kb/s")
+        self.download=TransparentPushButton(FluentIcon.DOWN.icon(color=QColor("#FF9800")),"- kb/s")
         self.download.setMinimumWidth(100)
         
         self.date=TransparentPushButton(FluentIcon.DATE_TIME.icon(color=QColor("#607D8B")),"2025/02/09 21:44:00")
@@ -62,23 +62,13 @@ class StatusBar(QWidget):
         self.channel.addItems(["线路: 上海","线路: 北京"])
         self.channel.setCurrentIndex(0)
         self.channel.setMinimumWidth(120)
-        self.channel.setStyleSheet("""
-            QComboBox {
-                border: 1px solid #E0E0E0;
-                border-radius: 4px;
-                padding: 4px 8px;
-                background-color: rgba(255, 255, 255, 0.8);
-            }
-            QComboBox:hover {
-                border-color: #BDBDBD;
-            }
-        """)
+   
         self.channel.currentTextChanged.connect(self.__handle_channel_menu_triggered)
         
         self.connect_status=TransparentPushButton(FluentIcon.CLOUD.icon(color=QColor("#F44336")),"服务器状态: 未连接")
         self.connect_status.setMinimumWidth(150)
         
-        self.battery=TransparentPushButton(QIcon("assets/svg/battery-full.svg"),"100%")
+        self.battery=TransparentPushButton(QIcon("assets/svg/battery-full.svg"),"-%")
         self.battery.setMinimumWidth(80)
 
         self.timer=QTimer(self)

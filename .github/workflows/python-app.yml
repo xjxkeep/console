@@ -6,42 +6,131 @@ name: Python application
 on:
   push:
     branches: [ "master" ]
+    tags:
+      - 'v*'  # 支持版本标签触发
   pull_request:
     branches: [ "master" ]
 
 permissions:
   contents: read
 
-
-
-
 jobs:
-  build-windows10:
-    runs-on: windows-2022  # windows 10 环境
+  build-windows:
+    runs-on: windows-2022
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Install ffmpeg
         run: |
           choco install ffmpeg
-          
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'  
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt  
+          pip install -r requirements.txt
           pip install pyinstaller
 
       - name: Package Application with PyInstaller
         run: |
-          pyinstaller -n console main.py --hidden-import uuid --debug=all
+          pyinstaller --name console `
+            --add-data "assets;assets" `
+            --add-data "protocol;protocol" `
+            --hidden-import uuid `
+            --hidden-import pkg `
+            --hidden-import components `
+            --hidden-import qfluentwidgets `
+            --noconsole `
+            --icon assets/images/logo.jpg `
+            main.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: console-windows10
-          path: dist/console  # 替换为生成的可执行文件路径
+          name: console-windows
+          path: dist/console
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install ffmpeg
+        run: |
+          brew install ffmpeg
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Package Application with PyInstaller
+        run: |
+          pyinstaller --name "Andless Console" \
+            --add-data "assets:assets" \
+            --add-data "protocol:protocol" \
+            --hidden-import uuid \
+            --hidden-import pkg \
+            --hidden-import components \
+            --hidden-import qfluentwidgets \
+            --windowed \
+            --icon assets/images/logo.jpg \
+            main.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: console-macos
+          path: dist/Andless Console.app
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libxcb-xinerama0 libxcb-cursor0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Package Application with PyInstaller
+        run: |
+          pyinstaller --name console \
+            --add-data "assets:assets" \
+            --add-data "protocol:protocol" \
+            --hidden-import uuid \
+            --hidden-import pkg \
+            --hidden-import components \
+            --hidden-import qfluentwidgets \
+            --noconsole \
+            main.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: console-linux
+          path: dist/console

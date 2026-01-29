@@ -189,9 +189,14 @@ class Debug(ScrollArea):
     
     
     def saveSetting(self):
+        """保存设置到 QSettings"""
         logging.info(f"save {self.getSetting()}")
-        with open(".setting.json", "w") as f:
-            json.dump(self.getSetting(), f)
+        # 更新 setting 对象的值
+        for key, value in self.getSetting().items():
+            if hasattr(self.setting, key):
+                setattr(self.setting, key, value)
+        # 同步到磁盘
+        self.setting.sync()
     
     def change_log_level(self, level_text):
         """日志级别选择改变时的处理"""
@@ -236,25 +241,12 @@ class Debug(ScrollArea):
         )
     
     def save_log_level_setting(self):
-        """保存日志级别设置到文件"""
+        """保存日志级别设置到 QSettings"""
         try:
-            import json
-            import os
-            # 读取现有设置
-            settings = {}
-            if os.path.exists(".setting.json"):
-                with open(".setting.json", "r", encoding='utf-8') as f:
-                    settings = json.load(f)
-            
-            # 更新日志级别设置
-            settings["log_level"] = self.setting.log_level
-            
-            # 保存到文件
-            with open(".setting.json", "w", encoding='utf-8') as f:
-                json.dump(settings, f, ensure_ascii=False, indent=2)
-            
+            # 同步到磁盘
+            self.setting.sync()
             logging.info(f"日志级别设置已保存: {self.setting.log_level}")
-            
+
         except Exception as e:
             logging.error(f"保存日志级别设置时出错: {e}")
             # 显示错误提示

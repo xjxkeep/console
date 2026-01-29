@@ -9,6 +9,8 @@ from PyQt5.QtGui import (
 )
 from PyQt5.QtWidgets import QSplashScreen
 
+from pkg.version import VERSION, APP_NAME
+
 
 class LoadingThread(QThread):
     """后台加载线程，用于模拟加载过程并发送进度更新"""
@@ -113,7 +115,7 @@ class SplashScreen(QSplashScreen):
         painter.setPen(QColor(80, 100, 130))
         font = QFont("Arial", 9)
         painter.setFont(font)
-        painter.drawText(0, height - 30, width, 20, Qt.AlignCenter, "v1.0.0")
+        painter.drawText(0, height - 30, width, 20, Qt.AlignCenter, f"v{VERSION}")
 
     def _draw_placeholder_logo(self, painter, width):
         """绘制占位 Logo（当图片不存在时）"""

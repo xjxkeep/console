@@ -5,11 +5,12 @@ import os
 import sys
 
 from PyQt5.QtCore import QThread, Qt, pyqtSignal, QTimer
-from PyQt5.QtGui import QCloseEvent, QPixmap
+from PyQt5.QtGui import QCloseEvent, QPixmap, QIcon
 from PyQt5.QtWidgets import QApplication, QSplashScreen, QVBoxLayout, QWidget
-from qfluentwidgets import BodyLabel
+from qfluentwidgets import BodyLabel, setTheme, Theme, isDarkTheme
 from qfluentwidgets.common import FluentIcon
 from qfluentwidgets.window import FluentWindow
+from qfluentwidgets.components.navigation import NavigationItemPosition
 
 from loader import SplashScreen
 from pkg.api import API
@@ -17,6 +18,7 @@ from pkg.model import HIDBody, Setting
 from pkg.mqtt import MQTTClient
 from pkg.quic import HighwayQuicClient
 from pkg.version_manager import VersionManager
+from pkg.version import get_window_title
 
 # TODO
 # 1. 封装下请求的host 等参数 统一管理 后面host走下发
@@ -24,15 +26,22 @@ from pkg.version_manager import VersionManager
 # 3. OTA
 
 class MainWindow(FluentWindow):
-    
-    
+
+
     def setupUi(self):
         from monitor import Monitor
         from components.video import VideoPlayer
         from controller import Controller
         from debug import Debug
         from about import About
-        from setting import SettingView    
+        from setting import SettingView
+
+        # 设置窗口图标和标题
+        icon_path = os.path.join(os.path.dirname(__file__), "assets/images/logo.jpg")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+        self.setWindowTitle(get_window_title())
+
         self.monitor=Monitor(self.setting)
         self.controller=Controller(self.setting)
         self.debug=Debug(self.setting)
@@ -41,17 +50,51 @@ class MainWindow(FluentWindow):
         self.resize(self.setting.window_width,self.setting.window_height)
         if self.setting.window_x != 0 and self.setting.window_y != 0:
             self.move(self.setting.window_x,self.setting.window_y)
-        
+
 
         self.debug_monitor=VideoPlayer()
         self.debug_monitor.setWindowTitle("Camera Live")
-        
 
-        self.addSubInterface(self.monitor,FluentIcon.MOVIE, "Monitor")
-        self.addSubInterface(self.controller,FluentIcon.GAME, "Controller")
-        self.addSubInterface(self.settingView,FluentIcon.SETTING,"Setting")
-        self.addSubInterface(self.debug,FluentIcon.DEVELOPER_TOOLS, "Debug")
-        self.addSubInterface(self.about,FluentIcon.FEEDBACK,"About")
+
+        self.addSubInterface(self.monitor,FluentIcon.HOME, "主页")
+        self.addSubInterface(self.controller,FluentIcon.GAME, "遥控")
+        self.addSubInterface(self.settingView,FluentIcon.SETTING,"设置")
+        self.addSubInterface(self.debug,FluentIcon.DEVELOPER_TOOLS, "调试")
+        self.addSubInterface(self.about,FluentIcon.FEEDBACK,"关于")
+
+        # 在导航栏底部添加主题切换按钮
+        self.navigationInterface.addItem(
+            routeKey='theme',
+            icon=FluentIcon.CONSTRACT,
+            text='主题',
+            onClick=self.toggleTheme,
+            selectable=False,
+            position=NavigationItemPosition.BOTTOM
+        )
+
+    def toggleTheme(self):
+        """切换明暗主题"""
+        if isDarkTheme():
+            setTheme(Theme.LIGHT)
+            self._saveThemeSetting("LIGHT")
+        else:
+            setTheme(Theme.DARK)
+            self._saveThemeSetting("DARK")
+
+    def _saveThemeSetting(self, theme: str):
+        """保存主题设置"""
+        from pkg.settings_manager import settings_manager
+        settings_manager.set("appearance/theme", theme)
+        settings_manager.sync()
+
+    def _loadThemeSetting(self):
+        """加载主题设置"""
+        from pkg.settings_manager import settings_manager
+        theme = settings_manager.get("appearance/theme", "LIGHT")
+        if theme == "DARK":
+            setTheme(Theme.DARK)
+        else:
+            setTheme(Theme.LIGHT)
         
     
 
@@ -61,6 +104,7 @@ class MainWindow(FluentWindow):
 
         self.setting = Setting()
         self.load_setting()
+        self._loadThemeSetting()  # 加载并应用主题设置
         self.setupUi() 
         
         # 初始化运行时间计时器
@@ -160,51 +204,55 @@ class MainWindow(FluentWindow):
             logging.info(f"Unexpected error in _handle_hid_response: {e}")
 
     def load_setting(self):
+        """加载设置 - 如果存在旧的 JSON 文件则迁移到 QSettings"""
         try:
             if os.path.exists(".setting.json"):
                 with open(".setting.json", "r") as f:
                     self.setting = Setting.model_validate_json(f.read())
-                logging.info(f"load setting: {self.setting}")
+                logging.info(f"Migrated settings from .setting.json")
+                # 迁移后删除旧文件
+                os.rename(".setting.json", ".setting.json.bak")
+                logging.info("Renamed .setting.json to .setting.json.bak")
         except Exception as e:
             logging.info(f"load setting error {e}")
-            # self.guide=Guide(self)
-            # self.guide.show()
-          
-    
+
     def quic_client_connected(self):
         logging.info("quic client connected")
-    
+
     def quic_client_connection_error(self,error):
         logging.info(f"quic client connection error {error}")
-        
+
     def update_uptime(self):
         """更新运行时间"""
         self.uptime_seconds += 1
         hours = self.uptime_seconds // 3600
         minutes = (self.uptime_seconds % 3600) // 60
         seconds = self.uptime_seconds % 60
-        
+
         # 更新 StatusPanel 中的运行时间
         self.monitor.statusPanel.update_uptime(hours, minutes, seconds)
-    
+
     def closeEvent(self, a0: QCloseEvent | None) -> None:
-        logging.info("mainwindow closeEvent")    
-        self.setting.channels=self.controller.getChannelValues()
-        self.setting.window_height,self.setting.window_width=self.height(),self.width()
-        self.setting.window_x,self.setting.window_y=self.x(),self.y()
-        logging.info(self.setting)
-        with open(".setting.json", "w") as f:
-            json.dump(self.setting.model_dump(), f)
+        logging.info("mainwindow closeEvent")
+        # 保存配置到 QSettings
+        self.setting.channels = self.controller.getChannelValues()
+        self.setting.window_height = self.height()
+        self.setting.window_width = self.width()
+        self.setting.window_x = self.x()
+        self.setting.window_y = self.y()
+        self.setting.sync()  # 同步到磁盘
+        logging.info(f"Settings saved: {self.setting}")
+
         self.mqtt_client.close()
-        logging.info("mqtt client closed")   
+        logging.info("mqtt client closed")
         self.quic_client.close()
         logging.info("quic client closed")
-        
+
         self.controller.close()
         logging.info("controller closed")
         self.debug_monitor.close()
         # self.api.close()
-        
+
         return super().closeEvent(a0)
 
 
