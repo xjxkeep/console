@@ -2,7 +2,8 @@ from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -66,7 +67,7 @@ class Register(_message.Message):
     subscribe_device: Device
     token: str
     read_only: bool
-    def __init__(self, device: _Optional[_Union[Device, _Mapping]] = ..., subscribe_device: _Optional[_Union[Device, _Mapping]] = ..., token: _Optional[str] = ..., read_only: bool = ...) -> None: ...
+    def __init__(self, device: _Optional[_Union[Device, _Mapping]] = ..., subscribe_device: _Optional[_Union[Device, _Mapping]] = ..., token: _Optional[str] = ..., read_only: _Optional[bool] = ...) -> None: ...
 
 class Control(_message.Message):
     __slots__ = ("channels",)
@@ -166,7 +167,7 @@ class File(_message.Message):
     checksum: int
     block_id: int
     last_block: bool
-    def __init__(self, name: _Optional[str] = ..., offset: _Optional[int] = ..., total_size: _Optional[int] = ..., data: _Optional[bytes] = ..., checksum: _Optional[int] = ..., block_id: _Optional[int] = ..., last_block: bool = ...) -> None: ...
+    def __init__(self, name: _Optional[str] = ..., offset: _Optional[int] = ..., total_size: _Optional[int] = ..., data: _Optional[bytes] = ..., checksum: _Optional[int] = ..., block_id: _Optional[int] = ..., last_block: _Optional[bool] = ...) -> None: ...
 
 class Audio(_message.Message):
     __slots__ = ("raw", "timestamp", "counter")

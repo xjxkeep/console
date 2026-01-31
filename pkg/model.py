@@ -79,12 +79,12 @@ class Setting:
 
     # 设备配置
     @property
-    def source_device_id(self) -> int:
-        return self._manager.source_device_id
+    def subscribe_id(self) -> int:
+        return self._manager.subscribe_id
 
-    @source_device_id.setter
-    def source_device_id(self, value: int):
-        self._manager.source_device_id = value
+    @subscribe_id.setter
+    def subscribe_id(self, value: int):
+        self._manager.subscribe_id = value
 
     @property
     def device_id(self) -> int:

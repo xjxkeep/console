@@ -109,8 +109,23 @@ class HighwayQuicClient(QObject):
         self.client = None
         self.reader = None
         self.writer = None
+        self.ntp_reader = None
+        self.ntp_writer = None
+        self.feedback_reader = None 
+        self.feedback_writer = None
+        self.control_reader = None
+        self.control_writer = None
+        self.file_reader = None
+        self.file_writer = None
+        self.imu_reader = None
+        self.imu_writer = None
+        self.datagram_reader = None
+        self.datagram_writer = None
+        self.video_reader = None
+        self.video_writer = None
         self.loop = None  # 初始化loop属性
         self.running = False
+        self.receive_video_count=0
         self.upload_bytes = 0
         self.download_bytes = 0
         
@@ -443,7 +458,7 @@ class HighwayQuicClient(QObject):
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
 
-    async def _establish_generic_stream(self, stream_name, message_type, read_task_func=None, need_subscribe=True):
+    async def _establish_generic_stream(self, stream_name, message_type, read_task_func=None, need_subscribe=True, subscribe_id=None):
         """通用的流建立方法，减少重复代码
         
         Args:
@@ -473,8 +488,10 @@ class HighwayQuicClient(QObject):
             
             # 如果需要订阅，添加订阅设备
             if need_subscribe:
+                
+                subscribe_id=subscribe_id if subscribe_id else int(self.setting.subscribe_id)
                 register_kwargs['subscribe_device'] = Device(
-                    id=int(self.setting.source_device_id),
+                    id=subscribe_id,
                     message_type=message_type
                 )
             
@@ -506,7 +523,7 @@ class HighwayQuicClient(QObject):
             try:
                 message = await asyncio.wait_for(self.receive_message(reader), timeout=1.0)
                 device_param = DeviceParam.FromString(message)
-                logging.debug(f"receive device param message {device_param}")
+                # logging.debug(f"receive device param message {device_param}")
                 self.device_param_ready.emit(device_param)
             except asyncio.TimeoutError:
                 # 超时是正常的，继续循环检查running状态
@@ -656,17 +673,17 @@ class HighwayQuicClient(QObject):
 
 
     async def establish_ntp_stream(self):
-        if self.setting.source_device_id == self.setting.device_id:
+        if self.setting.subscribe_id == self.setting.device_id:
             return
         
-        reader, writer = await self._establish_generic_stream(
+        self.ntp_reader, self.ntp_writer = await self._establish_generic_stream(
             stream_name="ntp",
             message_type=Device.MessageType.CLOCKSYNCHRONIZATIONPARAM
         )
         
         # NTP流需要创建两个任务：发送和读取
-        self.create_task(self.__send_ntp_message(writer=writer))
-        self.create_task(self.__read_ntp_stream(reader=reader))
+        self.create_task(self.__send_ntp_message(writer=self.ntp_writer))
+        self.create_task(self.__read_ntp_stream(reader=self.ntp_reader))
 
     async def __send_ntp_message(self,writer:asyncio.StreamWriter):
         while self.running:
@@ -684,7 +701,7 @@ class HighwayQuicClient(QObject):
                 message = await asyncio.wait_for(self.receive_message(reader), timeout=1.0)
                 ntp_param = ClockSynchronizationParam.FromString(message)
                 self.clock_offset=round(((ntp_param.req_rx_ms-ntp_param.req_tx_ms)+(ntp_param.resp_tx_ms-int(time.time()*1000)))/2)
-                logging.debug(f"receive ntp param message {ntp_param} clock_offset {self.clock_offset}")
+                # logging.debug(f"receive ntp param message {ntp_param} clock_offset {self.clock_offset}")
                 await self.send_message(writer=self.ntp_writer,message=ntp_param,flush=False)
             except asyncio.TimeoutError:
                 continue
@@ -693,11 +710,36 @@ class HighwayQuicClient(QObject):
                 break
 
     async def establish_feedback_stream(self):
-        await self._establish_generic_stream(
+        self.feedback_reader,self.feedback_writer = await self._establish_generic_stream(
             stream_name="feedback",
             message_type=Device.MessageType.VIDEO_FEEDBACK,
-            need_subscribe=False
+            # need_subscribe=True,
+            # subscribe_id=int(self.setting.device_id)
         )
+        self.create_task(self.__send_feedback_message(writer=self.feedback_writer))
+        # self.create_task(self.__read_feedback_stream(reader=self.feedback_reader))
+    async def __read_feedback_stream(self,reader:asyncio.StreamReader):
+        while self.running:
+            try:
+                message = await asyncio.wait_for(self.receive_message(reader), timeout=1.0)
+                feedback = VideoFeedback.FromString(message)
+                logging.info(f"receive feedback message {feedback}")
+            except Exception as e:
+                logging.error(f"读取反馈消息错误: {e}")
+                break
+
+    async def __send_feedback_message(self,writer:asyncio.StreamWriter):
+        while self.running:
+            try:
+                await self.send_message(writer=writer, message=VideoFeedback(received_frame_index=self.receive_video_count), flush=False)
+                await asyncio.sleep(0.5)
+                self.receive_video_count+=1
+                logging.info(f"send feedback message {self.receive_video_count}")
+            except Exception as e:
+                logging.error(f"发送反馈消息错误: {e}")
+                break
+    
+
     
 
     
@@ -815,7 +857,9 @@ class HighwayQuicClient(QObject):
         header=data[:4]
         length = (header[2]&0xff | (header[3]&0xff)<<8)
         data=data[4:4+length]
+        
         self.__parse_video_data(data)
+        
         
         
     def __parse_video_data(self,data:bytes):
@@ -826,9 +870,7 @@ class HighwayQuicClient(QObject):
                 self.h265_decoder_worker.write(video.raw)
             else:
                 self.h264_decoder_worker.write(video.raw)
-            if hasattr(self,"feedback_writer") and self.loop:
-                self.loop.call_soon_threadsafe(self.send_message,self.feedback_writer, VideoFeedback(received_frame_index=video.frame_id),True)  
-        
+            self.receive_video_count=video.frame_id
 
             # FIXME 如果传输的数据不是一个完整的NALU的话 会花屏
             if video.slice_id == video.slice_count:
@@ -847,7 +889,7 @@ class HighwayQuicClient(QObject):
             while self.running:
                 try:
                     message = await asyncio.wait_for(self.receive_message(reader), timeout=1.0)
-                    self.__parse_video_data(message)
+                    await self.__parse_video_data(message)
                 except asyncio.TimeoutError:
                     # 超时是正常的，继续循环检查running状态
                     continue

@@ -158,8 +158,8 @@ class FECCodec(QObject):
             M = packet.M
             
             # 1. 检查是否已经解码
-            if data_id in self.decoded_ids or data_id < self.frame_latest_id:
-                logging.debug(f"Block {data_id} already decoded or too old, ignoring.")
+            if data_id in self.decoded_ids:
+                logging.debug(f"Block {data_id} already decoded , ignoring.")
                 return
 
             # 2. 检查是否已存在，避免重复添加（可能因为网络重传）

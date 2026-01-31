@@ -1,6 +1,5 @@
 
 # 尝试从设置文件加载日志级别
-import faulthandler
 import logging
 import os
 import sys
@@ -10,7 +9,7 @@ from PyQt5.QtGui import QIcon
 
 from pkg.log_manager import log_manager
 
-faulthandler.enable(all_threads=True)
+
 # 使用日志管理器初始化日志
 log_manager._setup_logging()
 

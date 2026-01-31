@@ -21,7 +21,7 @@ class SettingsManager:
         "server/insecure": True,
 
         # 设备配置
-        "device/source_device_id": 1,
+        "device/subscribe_id": 1,
         "device/device_id": 1,
         "device/channel_count": 10,
         "device/token": "0",
@@ -145,12 +145,12 @@ class SettingsManager:
 
     # 设备配置
     @property
-    def source_device_id(self) -> int:
-        return self.get("device/source_device_id")
+    def subscribe_id(self) -> int:
+        return self.get("device/subscribe_id")
 
-    @source_device_id.setter
-    def source_device_id(self, value: int):
-        self.set("device/source_device_id", value)
+    @subscribe_id.setter
+    def subscribe_id(self, value: int):
+        self.set("device/subscribe_id", value)
 
     @property
     def device_id(self) -> int:
@@ -294,7 +294,7 @@ class SettingsManager:
             "host": self.host,
             "port": self.port,
             "insecure": self.insecure,
-            "source_device_id": self.source_device_id,
+            "subscribe_id": self.subscribe_id,
             "device_id": self.device_id,
             "channel_count": self.channel_count,
             "token": self.token,
@@ -318,7 +318,7 @@ class SettingsManager:
             "host": "server/host",
             "port": "server/port",
             "insecure": "server/insecure",
-            "source_device_id": "device/source_device_id",
+            "subscribe_id": "device/subscribe_id",
             "device_id": "device/device_id",
             "channel_count": "device/channel_count",
             "token": "device/token",

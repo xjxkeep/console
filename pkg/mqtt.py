@@ -57,7 +57,7 @@ class MQTTClient:
     def setting_topic(self):
         basic_topic=self.setting.mqtt_setting_topic
         device_id=self.setting.device_id
-        sub_id=self.setting.source_device_id
+        sub_id=self.setting.subscribe_id
         uuid=get_uuid(str(sub_id),str(device_id))
         return f"{basic_topic}/{uuid}"
 

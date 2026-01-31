@@ -116,7 +116,7 @@ class MainWindow(FluentWindow):
         self.api = API(self.setting,self)
         # self.device=self.api.get_device_info()
         # if self.device is not None: 
-        #     self.setting.source_device_id=self.device.device_id
+        #     self.setting.subscribe_id=self.device.device_id
         #     self.setting.token=self.device.token
         #     self.setting.device_id=self.device.subscribe_id
             
@@ -194,7 +194,7 @@ class MainWindow(FluentWindow):
         try:
             source_id = int(response.returns["id"],base=10)
             device_id = int(response.returns["sub_id"],base=10)
-            self.debug.setValue("source_device_id", source_id)
+            self.debug.setValue("subscribe_id", source_id)
             self.debug.setValue("device_id", device_id)
         except (ValueError, OverflowError) as e:
             logging.info(f"Error converting HID response IDs: {e}")

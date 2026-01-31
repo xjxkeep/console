@@ -44,7 +44,7 @@ class API:
         self.base_url = setting.base_url
         self.user_agent = setting.user_agent
         self.token = setting.token
-        self.source_device_id = setting.source_device_id
+        self.subscribe_id = setting.subscribe_id
         self.arch = setting.arch
     
     def Hi(self) -> Promise:
@@ -110,7 +110,7 @@ class API:
         return response
 
     def get_device_info(self) -> Device:
-        path = f"/verify/findDevice?device_id={self.source_device_id}"
+        path = f"/verify/findDevice?device_id={self.subscribe_id}"
         response = self._make_request("GET", path)
         response.raise_for_status()
         response = DeviceResponse.model_validate_json(json_data=response.content)

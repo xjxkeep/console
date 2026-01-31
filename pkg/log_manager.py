@@ -3,6 +3,7 @@
 """
 import logging
 import os
+import sys
 from typing import Optional
 
 try:
@@ -43,9 +44,21 @@ class LogManager(QObject):
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
         
-        # 控制台处理器
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
+        # 控制台处理器 - 检查 sys.stderr 是否可用
+        # 在某些环境（如 PyInstaller 打包）中，sys.stderr 可能为 None
+        console_handler = None
+        if sys.stderr is not None:
+            try:
+                console_handler = logging.StreamHandler(sys.stderr)
+                console_handler.setFormatter(formatter)
+            except (RuntimeError, AttributeError):
+                # 如果 stderr 不可用，尝试使用 stdout
+                if sys.stdout is not None:
+                    try:
+                        console_handler = logging.StreamHandler(sys.stdout)
+                        console_handler.setFormatter(formatter)
+                    except (RuntimeError, AttributeError):
+                        console_handler = None
         
         # 文件处理器
         file_handler = logging.FileHandler(self.log_file_path, encoding='utf-8')
@@ -54,12 +67,16 @@ class LogManager(QObject):
         # 配置根日志记录器
         root_logger = logging.getLogger()
         root_logger.setLevel(self.current_level)
-        root_logger.addHandler(console_handler)
+        
+        # 只添加可用的处理器
+        if console_handler is not None:
+            root_logger.addHandler(console_handler)
         root_logger.addHandler(file_handler)
         
         # 避免重复添加处理器
-        if len(root_logger.handlers) > 2:
-            for handler in root_logger.handlers[2:]:
+        expected_handlers = 2 if console_handler is not None else 1
+        if len(root_logger.handlers) > expected_handlers:
+            for handler in root_logger.handlers[expected_handlers:]:
                 root_logger.removeHandler(handler)
     
     def set_log_level(self, level: str) -> bool:
