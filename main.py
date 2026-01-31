@@ -34,12 +34,10 @@ try:
     splash.show()
     logging.info("loading")
     from index import MainWindow
-    # from qfluentwidgets import setTheme,Theme
-    # setTheme(Theme.DARK)
-    logging.info("start prometheus http server on port 8000")
+
     app.processEvents()
     m = MainWindow()
-    splash.loading_complete()
+    # splash.loading_complete()
     splash.finish(m)
     m.show()
     app.exec()

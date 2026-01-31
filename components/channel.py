@@ -136,9 +136,14 @@ class Detector(QWidget):
     loading=pyqtSignal(str)
     # 新增信号：当选择模拟摇杆时为True，否则为False
     virtual_joystick_selected = pyqtSignal(bool)
+    # 设备列表刷新信号：(设备名称列表)
+    devices_refreshed = pyqtSignal(list)
+    # 设备选择变化信号：(设备索引)
+    device_index_changed = pyqtSignal(int)
 
     def __init__(self) -> None:
         super().__init__()
+        self._syncing = False  # 防止循环触发
         self.setupUi()
         self.deviceMap:dict[Any, Any]=dict[Any, Any]()
         self.joystick=JoyStick()
@@ -159,12 +164,18 @@ class Detector(QWidget):
         self.refresh=TransparentToolButton(FluentIcon.SYNC.icon(),self)
         self.label=TransparentPushButton(FluentIcon.GAME.icon(),"选择设备:",self)
         self.refresh.clicked.connect(self.refreshDevices)
-        self.devices.currentIndexChanged.connect(self.deviceChosen)
+        self.devices.currentIndexChanged.connect(self._onDeviceIndexChanged)
         layout.addWidget(self.label)
         layout.addWidget(self.devices)
         layout.addWidget(self.refresh)
         self.setLayout(layout)
-    
+
+    def _onDeviceIndexChanged(self, idx: int):
+        """内部处理设备索引变化"""
+        self.deviceChosen(idx)
+        if not self._syncing:
+            self.device_index_changed.emit(idx)
+
     def deviceChosen(self,idx:int):
         device=self.deviceMap.get(idx)
         if device is None:
@@ -194,11 +205,11 @@ class Detector(QWidget):
             self.__getattribute__(device["type"]).select_device(device["id"])
             self.__getattribute__(device["type"]).signal.connect(self.signal.emit)
             logging.info(f"选择了设备: {device['type']}, ID: {device['id']}")
-        
+
     def setDevices(self,devices:list):
         self.devices.clear()
         self.devices.addItems(devices)
-    
+
     def getDevices(self):
         deviceCount=0
         devices=[]
@@ -206,7 +217,7 @@ class Detector(QWidget):
         devices.append("模拟摇杆")
         self.deviceMap[deviceCount]={"id":0,"type":"virtual_joystick"}
         deviceCount+=1
-        
+
         # 添加物理摇杆设备
         joys=self.joystick.get_device_list()
         for joy in joys:
@@ -216,25 +227,34 @@ class Detector(QWidget):
         logging.info(devices)
         logging.info(self.deviceMap)
         return devices
-    
+
     def refreshDevices(self):
-        self.setDevices(self.getDevices())
+        devices = self.getDevices()
+        self.setDevices(devices)
         # 默认选择模拟摇杆（索引0）
         self.devices.setCurrentIndex(0)
         # 手动触发设备选择事件
         self.deviceChosen(0)
-    
+        # 发出设备列表刷新信号
+        self.devices_refreshed.emit(devices)
+
+    def setCurrentDevice(self, index: int):
+        """设置当前选中的设备（用于同步，不触发 device_index_changed 信号）"""
+        self._syncing = True
+        if 0 <= index < self.devices.count():
+            self.devices.setCurrentIndex(index)
+        self._syncing = False
 
     def close(self):
         if hasattr(self,"joystick"):
             self.joystick.close()
             logging.info("detector joystick close")
         super().close()
-    
+
     def lazy_init(self):
         if not hasattr(self,"joystick"):
             self.joystick.init()
-    
+
     def handle_virtual_joystick_change(self, x: float, y: float):
         """处理虚拟摇杆的位置变化信号"""
         if self.current_device_type == "virtual_joystick":
@@ -247,18 +267,18 @@ class Detector(QWidget):
 
 
 class ChannelDisp(QWidget):
-    
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.channels:list[Channel]=[]
         self.setupUi()
-        
+
 
     def setupUi(self):
         layout=QGridLayout()
         layout.setSpacing(0)
         layout.setContentsMargins(10,10,10,10)
-        
+
         row,col=5,2
         for j in range(col):
             for i in range(row):
@@ -268,11 +288,17 @@ class ChannelDisp(QWidget):
                 self.channels.append(channel)
                 layout.addWidget(channel,i,j)
         self.setLayout(layout)
-    
+
     def setJoystickValue(self,x:float,y:float):
         self.channels[0].setValue(round(50+x*50))
         self.channels[1].setValue(round(50-y*50))
 
+    def setValues(self, values: list[int]):
+        """设置所有通道的值"""
+        for idx, value in enumerate(values):
+            if idx >= len(self.channels):
+                break
+            self.channels[idx].setValue(value)
 
     def update_channel_value(self,idx:int,value:int):
         if idx>=len(self.channels):

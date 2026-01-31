@@ -456,17 +456,34 @@ class ButtonController(QWidget):
 
 class ControlPanel(GroupHeaderCardWidget):
     joystick_changed = pyqtSignal(float, float)
+    # 设备选择变化信号：(设备索引)
+    device_selected = pyqtSignal(int)
+
     def __init__(self):
         super().__init__()
+        self._syncing = False  # 防止循环触发
         self.initUI()
         # self.setFixedSize(400, 600)
 
     def initUI(self):
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(20)
+        main_layout.setSpacing(15)
 
         self.setTitle("实时控制")
+
+        # 设备选择区域
+        from qfluentwidgets import ComboBox, FluentIcon, TransparentToolButton, TransparentPushButton
+        device_layout = QHBoxLayout()
+        self.device_label = TransparentPushButton(FluentIcon.GAME.icon(), "设备:", self)
+        self.device_combo = ComboBox(self)
+        self.refresh_btn = TransparentToolButton(FluentIcon.SYNC.icon(), self)
+        self.refresh_btn.clicked.connect(self._on_refresh_clicked)
+        self.device_combo.currentIndexChanged.connect(self._on_device_changed)
+        device_layout.addWidget(self.device_label)
+        device_layout.addWidget(self.device_combo, 1)
+        device_layout.addWidget(self.refresh_btn)
+        main_layout.addLayout(device_layout)
 
         # 圆形控制区（居中显示）
         joystick_layout = QVBoxLayout()
@@ -491,9 +508,48 @@ class ControlPanel(GroupHeaderCardWidget):
         main_layout.addStretch(1)
         self.vBoxLayout.addLayout(main_layout)
 
+        # 刷新按钮点击回调（由外部设置）
+        self._refresh_callback = None
+
+    def setRefreshCallback(self, callback):
+        """设置刷新按钮的回调函数"""
+        self._refresh_callback = callback
+
+    def _on_refresh_clicked(self):
+        """刷新按钮点击"""
+        if self._refresh_callback:
+            self._refresh_callback()
+
+    def _on_device_changed(self, index: int):
+        """设备选择变化"""
+        if not self._syncing:
+            self.device_selected.emit(index)
+
+    def setDeviceList(self, devices: list[str]):
+        """设置设备列表"""
+        self._syncing = True
+        current_index = self.device_combo.currentIndex()
+        self.device_combo.clear()
+        self.device_combo.addItems(devices)
+        # 尝试恢复之前的选择
+        if 0 <= current_index < len(devices):
+            self.device_combo.setCurrentIndex(current_index)
+        self._syncing = False
+
+    def setCurrentDevice(self, index: int):
+        """设置当前选中的设备（用于同步）"""
+        self._syncing = True
+        if 0 <= index < self.device_combo.count():
+            self.device_combo.setCurrentIndex(index)
+        self._syncing = False
+
     def setJoystickActive(self, active: bool):
         """设置摇杆激活状态"""
         self.joystick.setActive(active)
+
+    def setChannelValues(self, values: list[int]):
+        """设置通道显示值（用于同步遥控页面的通道值）"""
+        self.channelDisp.setValues(values)
 
     def on_joystick_changed(self, x, y):
         """摇杆位置变化回调"""

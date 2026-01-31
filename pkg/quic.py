@@ -718,6 +718,9 @@ class HighwayQuicClient(QObject):
         )
         self.create_task(self.__send_feedback_message(writer=self.feedback_writer))
         # self.create_task(self.__read_feedback_stream(reader=self.feedback_reader))
+
+
+        
     async def __read_feedback_stream(self,reader:asyncio.StreamReader):
         while self.running:
             try:

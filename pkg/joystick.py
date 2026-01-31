@@ -26,22 +26,34 @@ class JoyStick(ControllerBase):
         self.timer.start(50)
     
     
-    def lazy_init(self):
+    def _lazy_init_internal(self):
+        """内部初始化方法（不带锁，由调用者持有锁）"""
         global pygame
         pygame = importlib.import_module('pygame')
         pygame.init()
         pygame.joystick.init()
         self._pygame_initialized = True
+        logging.info("pygame initialized")
+
+    def lazy_init(self):
+        """延迟初始化 pygame（线程安全）"""
+        with self._lock:
+            if not self._pygame_initialized:
+                self._lazy_init_internal()
     
     def get_device_list(self):
         """获取所有已连接的手柄设备列表"""
         devices = []
         try:
             with self._lock:
+                # 自动初始化 pygame（如果尚未初始化）
                 if not self._pygame_initialized:
-                    logging.info("pygame not initialized")
-                    return []
-                
+                    self._lazy_init_internal()
+
+                # 重新初始化 joystick 子系统以检测新设备
+                pygame.joystick.quit()
+                pygame.joystick.init()
+
                 for i in range(pygame.joystick.get_count()):
                     try:
                         joy = pygame.joystick.Joystick(i)
@@ -59,7 +71,7 @@ class JoyStick(ControllerBase):
     def select_device(self, device_id: int):
         if self.device_id==device_id:
             return True
-            
+
         try:
             with self._lock:
                 # 先关闭当前手柄
@@ -69,16 +81,15 @@ class JoyStick(ControllerBase):
                     except Exception as e:
                         logging.info(f"Error quitting joystick: {e}")
                     self.joystick = None
-                
-                # 确保pygame已初始化
+
+                # 自动初始化 pygame（如果尚未初始化）
                 if not self._pygame_initialized:
-                    logging.info("pygame not initialized")
-                    return False
-                
+                    self._lazy_init_internal()
+
                 if device_id >= pygame.joystick.get_count():
                     logging.info(f"Device ID {device_id} out of range")
                     return False
-                    
+
                 self.joystick = pygame.joystick.Joystick(device_id)
                 self.joystick.init()
                 self.device_id = device_id
@@ -174,9 +185,14 @@ class JoyStick(ControllerBase):
 
 
 if __name__=="__main__":
+    logging.basicConfig(level=logging.INFO)
     joystick=JoyStick()
-    joystick.init()
-    
-    logging.info(joystick.get_device_list())
-    time.sleep(2)
+
+    devices = joystick.get_device_list()
+    logging.info(f"Found devices: {devices}")
+
+    if devices:
+        joystick.select_device(0)
+        time.sleep(2)
+
     joystick.close()

@@ -163,6 +163,34 @@ class MainWindow(FluentWindow):
             self.monitor.controlPanel.setJoystickActive
         )
 
+        # 同步遥控页面的通道值到主页的 ChannelDisp
+        self.controller.controlMessage.connect(
+            self.monitor.controlPanel.setChannelValues
+        )
+
+        # 同步设备选择：遥控页面 -> 主页
+        self.controller.detector.devices_refreshed.connect(
+            self.monitor.controlPanel.setDeviceList
+        )
+        self.controller.detector.device_index_changed.connect(
+            self.monitor.controlPanel.setCurrentDevice
+        )
+
+        # 同步设备选择：主页 -> 遥控页面
+        self.monitor.controlPanel.device_selected.connect(
+            self.controller.detector.setCurrentDevice
+        )
+
+        # 主页刷新按钮触发遥控页面的刷新
+        self.monitor.controlPanel.setRefreshCallback(
+            self.controller.detector.refreshDevices
+        )
+
+        # 初始化主页的设备列表
+        self.monitor.controlPanel.setDeviceList(
+            self.controller.detector.getDevices()
+        )
+
         self.settingView.hid_response.connect(self._handle_hid_response)
         
         # self.client.start()

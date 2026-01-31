@@ -1,13 +1,14 @@
 
 import os
 import time
+import typing
 
 from PyQt5.QtCore import QRect, QThread, QTimer, Qt, pyqtSignal, QRectF
 from PyQt5.QtGui import (
     QColor, QFont, QLinearGradient, QPainter, QPainterPath,
     QPixmap, QBrush, QPen
 )
-from PyQt5.QtWidgets import QSplashScreen
+from PyQt5.QtWidgets import QSplashScreen, QWidget
 
 from pkg.version import VERSION, APP_NAME
 
@@ -17,16 +18,35 @@ class LoadingThread(QThread):
     progress_updated = pyqtSignal(int)
     loading_finished = pyqtSignal()
 
+    # 数据未加载完时的最大进度值
+    MAX_PROGRESS_BEFORE_LOADED = 90
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.progress = 0
+        self._data_loaded = False
+
+    def set_data_loaded(self):
+        """标记数据已加载完成"""
+        self._data_loaded = True
 
     def run(self):
-        """模拟加载过程，实际项目中可替换为真实的资源加载逻辑"""
+        """模拟加载过程，数据未加载完时最多走到 MAX_PROGRESS_BEFORE_LOADED"""
         while self.progress < 100:
-            self.progress += 1
-            self.progress_updated.emit(self.progress)
-            time.sleep(0.02)
+            if not self._data_loaded:
+                # 数据未加载完，最多走到 MAX_PROGRESS_BEFORE_LOADED
+                if self.progress < self.MAX_PROGRESS_BEFORE_LOADED:
+                    self.progress += 1
+                    self.progress_updated.emit(self.progress)
+                    time.sleep(0.02)
+                else:
+                    # 到达上限后，缓慢增加等待数据加载
+                    time.sleep(0.05)
+            else:
+                # 数据已加载完，快速跳到 100%
+                self.progress = 100
+                self.progress_updated.emit(self.progress)
+                break
 
         self.loading_finished.emit()
 
@@ -54,8 +74,18 @@ class SplashScreen(QSplashScreen):
         # 创建并启动加载线程
         self.loading_thread = LoadingThread(self)
         self.loading_thread.progress_updated.connect(self.update_progress)
-        self.loading_thread.loading_finished.connect(self.loading_complete)
+        # self.loading_thread.loading_finished.connect(self.loading_complete)
+    
+    def show(self) -> None:
         self.loading_thread.start()
+        return super().show()
+
+
+    def finish(self, w: typing.Optional[QWidget]) -> None:
+        # 标记数据已加载完成，让进度条跳到 100%
+        self.loading_thread.set_data_loaded()
+        self.loading_complete()
+        return super().finish(w)
 
     def drawContents(self, painter):
         """绘制启动页内容"""
