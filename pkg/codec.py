@@ -47,7 +47,10 @@ class VideoDecoder(QObject):
         self.stream.write(data)
 
     def get_frame(self):
-        return self.frames.get()
+        try:
+            return self.frames.get_nowait()  # 非阻塞获取，避免UI卡死
+        except:
+            return None
 
     def frame_decode_task(self):
         if not self.running:

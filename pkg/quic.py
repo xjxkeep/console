@@ -735,8 +735,7 @@ class HighwayQuicClient(QObject):
         while self.running:
             try:
                 await self.send_message(writer=writer, message=VideoFeedback(received_frame_index=self.receive_video_count), flush=False)
-                await asyncio.sleep(0.5)
-                self.receive_video_count+=1
+                await asyncio.sleep(0.2)
                 logging.info(f"send feedback message {self.receive_video_count}")
             except Exception as e:
                 logging.error(f"发送反馈消息错误: {e}")
