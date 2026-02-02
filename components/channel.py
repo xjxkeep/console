@@ -24,7 +24,7 @@ from qfluentwidgets import (
     setTheme,
 )
 
-from pkg.joystick import JoyStick
+from pkg.joystick_remote import create_joystick
 
 class Channel(QWidget):
     valueChanged=pyqtSignal(int)
@@ -146,7 +146,7 @@ class Detector(QWidget):
         self._syncing = False  # 防止循环触发
         self.setupUi()
         self.deviceMap:dict[Any, Any]=dict[Any, Any]()
-        self.joystick=JoyStick()
+        self.joystick=create_joystick()
 
         # 延迟导入 JoystickController 以避免循环导入
         from components.controller import JoystickController

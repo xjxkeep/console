@@ -38,7 +38,7 @@ class LoadingThread(QThread):
                 if self.progress < self.MAX_PROGRESS_BEFORE_LOADED:
                     self.progress += 1
                     self.progress_updated.emit(self.progress)
-                    time.sleep(0.02)
+                    time.sleep(0.01)
                 else:
                     # 到达上限后，缓慢增加等待数据加载
                     time.sleep(0.05)
@@ -80,12 +80,6 @@ class SplashScreen(QSplashScreen):
         self.loading_thread.start()
         return super().show()
 
-
-    def finish(self, w: typing.Optional[QWidget]) -> None:
-        # 标记数据已加载完成，让进度条跳到 100%
-        self.loading_thread.set_data_loaded()
-        self.loading_complete()
-        return super().finish(w)
 
     def drawContents(self, painter):
         """绘制启动页内容"""

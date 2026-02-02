@@ -1,6 +1,7 @@
 
 # 尝试从设置文件加载日志级别
 import logging
+import multiprocessing
 import os
 import sys
 
@@ -10,37 +11,40 @@ from PyQt5.QtGui import QIcon
 from pkg.log_manager import log_manager
 
 
-# 使用日志管理器初始化日志
-log_manager._setup_logging()
+if __name__ == '__main__':
+    multiprocessing.freeze_support()
 
-try:
-    app = QApplication(sys.argv)
+    # 使用日志管理器初始化日志
+    log_manager._setup_logging()
 
-    # 设置应用程序图标
-    icon_path = os.path.join(os.path.dirname(__file__), "assets/images/logo.jpg")
-    if os.path.exists(icon_path):
-        app.setWindowIcon(QIcon(icon_path))
+    try:
+        app = QApplication(sys.argv)
 
-    # 从 QSettings 加载日志级别
-    from pkg.settings_manager import settings_manager
-    log_level = settings_manager.log_level
-    if log_level:
-        log_manager.set_log_level(log_level)
-        logging.info(f"Loaded log level from settings: {log_level}")
+        # 设置应用程序图标
+        icon_path = os.path.join(os.path.dirname(__file__), "assets/images/logo.jpg")
+        if os.path.exists(icon_path):
+            app.setWindowIcon(QIcon(icon_path))
 
-    from loader import SplashScreen
-    splash = SplashScreen()
+        # 从 QSettings 加载日志级别
+        from pkg.settings_manager import settings_manager
+        log_level = settings_manager.log_level
+        if log_level:
+            log_manager.set_log_level(log_level)
+            logging.info(f"Loaded log level from settings: {log_level}")
 
-    splash.show()
-    logging.info("loading")
-    from index import MainWindow
+        from loader import SplashScreen
+        splash = SplashScreen()
 
-    app.processEvents()
-    m = MainWindow()
-    # splash.loading_complete()
-    splash.finish(m)
-    m.show()
-    app.exec()
-except Exception as e:
-    logging.error(f"main error {e}")
-    sys.exit(1)
+        splash.show()
+        logging.info("loading")
+        from index import MainWindow
+
+        app.processEvents()
+        m = MainWindow()
+        splash.finish(m)
+        
+        m.show()
+        app.exec()
+    except Exception as e:
+        logging.error(f"main error {e}")
+        sys.exit(1)

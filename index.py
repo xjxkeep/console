@@ -6,20 +6,22 @@ import sys
 
 from PyQt5.QtCore import QThread, Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QCloseEvent, QPixmap, QIcon
-from PyQt5.QtWidgets import QApplication, QSplashScreen, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel, setTheme, Theme, isDarkTheme
 from qfluentwidgets.common import FluentIcon
 from qfluentwidgets.window import FluentWindow
 from qfluentwidgets.components.navigation import NavigationItemPosition
 
-from loader import SplashScreen
 from pkg.api import API
 from pkg.model import HIDBody, Setting
 from pkg.mqtt import MQTTClient
 from pkg.quic import HighwayQuicClient
-from pkg.version_manager import VersionManager
 from pkg.version import get_window_title
-
+from monitor import Monitor
+from components.video import VideoPlayer
+from controller import Controller
+from debug import Debug
+from about import About
+from setting import SettingView
 # TODO
 # 1. 封装下请求的host 等参数 统一管理 后面host走下发
 # 2. 界面完善
@@ -29,13 +31,6 @@ class MainWindow(FluentWindow):
 
 
     def setupUi(self):
-        from monitor import Monitor
-        from components.video import VideoPlayer
-        from controller import Controller
-        from debug import Debug
-        from about import About
-        from setting import SettingView
-
         # 设置窗口图标和标题
         icon_path = os.path.join(os.path.dirname(__file__), "assets/images/logo.jpg")
         if os.path.exists(icon_path):
