@@ -186,30 +186,45 @@ class FECCodec(QObject):
                     # 准备解码数据
                     # [ (payload, block_index, timestamp), ... ]
                     blocks_info = self.received_blocks[data_id]
-                    blocks = [info[0] for info in blocks_info]
-                    shard_indices = [info[1] for info in blocks_info]
-                    
+
                     # 验证参数有效性，防止崩溃
                     if K <= 0 or K > 255 or M < 0 or M > 255:
                         logging.error(f"Invalid FEC parameters: K={K}, M={M} for data_id {data_id}")
                         return
-                    
-                    if len(blocks) < K:
-                        logging.warning(f"Not enough blocks for decoding: got {len(blocks)}, need {K}")
+
+                    if len(blocks_info) < K:
+                        logging.warning(f"Not enough blocks for decoding: got {len(blocks_info)}, need {K}")
                         return
-                    
-                    if len(blocks) != len(shard_indices):
-                        logging.error(f"Blocks and indices count mismatch: {len(blocks)} != {len(shard_indices)}")
+
+                    # 过滤掉大小不一致的块（可能是传输中被截断的）
+                    # 首先确定正确的块大小（取众数）
+                    size_counts = {}
+                    for info in blocks_info:
+                        size = len(info[0])
+                        size_counts[size] = size_counts.get(size, 0) + 1
+                    expected_size = max(size_counts, key=size_counts.get)
+
+                    # 过滤出大小正确的块
+                    valid_blocks_info = [info for info in blocks_info if len(info[0]) == expected_size]
+
+                    if len(valid_blocks_info) < K:
+                        logging.warning(f"Not enough valid blocks for decoding: got {len(valid_blocks_info)} valid blocks, need {K}")
                         return
-                    
+
+                    # 只取前 K 个有效块进行解码 (zfec 要求恰好 K 个块)
+                    valid_blocks_info = valid_blocks_info[:K]
+
+                    blocks = [info[0] for info in valid_blocks_info]
+                    shard_indices = [info[1] for info in valid_blocks_info]
+
                     # 验证索引范围
                     for idx in shard_indices:
                         if idx < 0 or idx >= (K + M):
                             logging.error(f"Invalid shard index: {idx}, must be in [0, {K+M-1}]")
                             return
-                    
+
                     decoder = Decoder(K, K + M)
-                    
+
                     # zfec.decode 的正确调用方式: decode(blocks, indices, padlen)
                     # padlen 是填充长度，由于解码时不知道原始数据长度，使用 0
                     # 如果原始数据有填充，解码后的数据末尾会有填充字节，但通常不影响使用

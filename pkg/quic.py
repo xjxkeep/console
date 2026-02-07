@@ -900,9 +900,9 @@ class HighwayQuicClient(QObject):
                     break
 
         except asyncio.CancelledError as e:
-            logging.error(f"_read_video_stream {e}")
+            logging.error(f"_read_video_stream {e.with_traceback(e.__traceback__)}")
         except Exception as e:
-            logging.error(f"read video stream error {e}")
+            logging.error(f"read video stream error {e.with_traceback()}")
             self.video_stream_failed.emit(f"Read error: {str(e)}")
 
         finally:
