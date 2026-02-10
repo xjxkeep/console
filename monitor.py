@@ -178,6 +178,9 @@ class Monitor(QWidget):
                     data.imu_param.gyroscope_y,
                     data.imu_param.gyroscope_z
                 )
+
+                # 更新姿态球
+                self.statusPanel.update_attitude(data.imu_param)
             
         except Exception as e:
             logging.error(f"更新设备参数数据时出错: {e}")

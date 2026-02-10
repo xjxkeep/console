@@ -21,6 +21,9 @@ from qfluentwidgets import (
     SimpleCardWidget,
     isDarkTheme
 )
+from components.attitude_ball import AttitudeBall
+from components.speedometer import Speedometer
+from protocol.highway_pb2 import IMUParam
 
 
 class StatusBar(QWidget):
@@ -204,7 +207,14 @@ class StatusPanel(GroupHeaderCardWidget):
         line.setFixedHeight(1)
         main_layout.addWidget(line)
 
-        # 传感器数据
+        # 传感器区域: 左侧数据 | 右侧姿态球
+        sensor_layout = QHBoxLayout()
+        sensor_layout.setSpacing(6)
+
+        # 左侧: 传感器数据列表
+        sensor_data_layout = QVBoxLayout()
+        sensor_data_layout.setSpacing(6)
+
         # 加速度
         accel_row = QHBoxLayout()
         accel_row.setSpacing(4)
@@ -215,7 +225,7 @@ class StatusPanel(GroupHeaderCardWidget):
         self._value_labels["accel"] = BodyLabel("X:-- Y:-- Z:--")
         accel_row.addWidget(self._value_labels["accel"])
         accel_row.addStretch()
-        main_layout.addLayout(accel_row)
+        sensor_data_layout.addLayout(accel_row)
 
         # 角速度
         gyro_row = QHBoxLayout()
@@ -227,7 +237,7 @@ class StatusPanel(GroupHeaderCardWidget):
         self._value_labels["gyro"] = BodyLabel("X:-- Y:-- Z:--")
         gyro_row.addWidget(self._value_labels["gyro"])
         gyro_row.addStretch()
-        main_layout.addLayout(gyro_row)
+        sensor_data_layout.addLayout(gyro_row)
 
         # GPS
         gps_row = QHBoxLayout()
@@ -239,19 +249,23 @@ class StatusPanel(GroupHeaderCardWidget):
         self._value_labels["gps"] = BodyLabel("--")
         gps_row.addWidget(self._value_labels["gps"])
         gps_row.addStretch()
-        main_layout.addLayout(gps_row)
+        sensor_data_layout.addLayout(gps_row)
 
-        # 速度/里程
-        speed_row = QHBoxLayout()
-        speed_row.setSpacing(4)
-        speed_row.setContentsMargins(10,0,10,0)
-        speed_label = CaptionLabel("速度")
-        speed_label.setFixedWidth(48)
-        speed_row.addWidget(speed_label)
-        self._value_labels["speed"] = BodyLabel("--")
-        speed_row.addWidget(self._value_labels["speed"])
-        speed_row.addStretch()
-        main_layout.addLayout(speed_row)
+        # 速度仪表盘
+        self.speedometer = Speedometer(max_speed=120)
+        self.speedometer.setFixedSize(130, 130)
+        sensor_data_layout.addWidget(self.speedometer, 0, Qt.AlignHCenter)
+
+        sensor_data_layout.addStretch()
+
+        sensor_layout.addLayout(sensor_data_layout, 1)
+
+        # 右侧: 姿态球
+        self.attitude_ball = AttitudeBall()
+        self.attitude_ball.setFixedSize(160, 160)
+        sensor_layout.addWidget(self.attitude_ball, 0, Qt.AlignTop)
+
+        main_layout.addLayout(sensor_layout)
 
         self.vBoxLayout.addLayout(main_layout)
 
@@ -301,7 +315,12 @@ class StatusPanel(GroupHeaderCardWidget):
             self._update_value('gps', f"{latitude:.4f}, {longitude:.4f}")
 
     def update_speed_odometer(self, speed: float, odometer: float):
-        self._update_value('speed', f"{speed:.1f}km/h | {odometer:.1f}km")
+        self.speedometer.setValue(speed)
+        self.speedometer.setOdometer(odometer)
+
+    def update_attitude(self, imu_data: IMUParam, dt: float = 0.05):
+        """更新姿态球"""
+        self.attitude_ball.update_from_imu(imu_data, dt)
 
 
 
