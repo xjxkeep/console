@@ -4,6 +4,7 @@ import logging
 import multiprocessing
 import os
 import sys
+import time
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QIcon
@@ -36,11 +37,27 @@ if __name__ == '__main__':
         splash = SplashScreen()
 
         splash.show()
-        logging.info("loading")
-        from index import MainWindow
-
         app.processEvents()
-        m = MainWindow()
+        logging.info("loading")
+
+        # 后台线程导入 index 模块（含重量级依赖），splash 保持动画
+        import importlib
+        from threading import Thread
+
+        result = {}
+
+        def do_import():
+            result['module'] = importlib.import_module('index')
+            splash.loading_thread.set_data_loaded()
+
+        import_thread = Thread(target=do_import, daemon=True)
+        import_thread.start()
+
+        while import_thread.is_alive():
+            app.processEvents()
+            time.sleep(0.01)
+
+        m = result['module'].MainWindow()
         splash.finish(m)
         
         m.show()

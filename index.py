@@ -11,17 +11,13 @@ from qfluentwidgets.common import FluentIcon
 from qfluentwidgets.window import FluentWindow
 from qfluentwidgets.components.navigation import NavigationItemPosition
 
-from pkg.api import API
 from pkg.model import HIDBody, Setting
-from pkg.mqtt import MQTTClient
-from pkg.quic import HighwayQuicClient
 from pkg.version import get_window_title
 from monitor import Monitor
 from components.video import VideoPlayer
 from controller import Controller
 from debug import Debug
 from about import About
-from setting import SettingView
 # TODO
 # 1. 封装下请求的host 等参数 统一管理 后面host走下发
 # 2. 界面完善
@@ -41,6 +37,8 @@ class MainWindow(FluentWindow):
         self.controller=Controller(self.setting)
         self.debug=Debug(self.setting)
         self.about=About()
+
+        from setting import SettingView
         self.settingView=SettingView()
         self.resize(self.setting.window_width,self.setting.window_height)
         if self.setting.window_x != 0 and self.setting.window_y != 0:
@@ -108,6 +106,7 @@ class MainWindow(FluentWindow):
         self.uptime_timer.timeout.connect(self.update_uptime)
         self.uptime_timer.start(1000)  # 每秒更新一次
         # 初始化 API 实例
+        from pkg.api import API
         self.api = API(self.setting,self)
         # self.device=self.api.get_device_info()
         # if self.device is not None: 
@@ -119,6 +118,7 @@ class MainWindow(FluentWindow):
             
         # self.version_manager=VersionManager(self.setting,self.api,self)
         # self.version_manager.check_update()
+        from pkg.quic import HighwayQuicClient
         self.quic_client=HighwayQuicClient(self.setting)
     
         self.quic_client.upload_speed.connect(self.monitor.update_upload_speed)
@@ -137,6 +137,7 @@ class MainWindow(FluentWindow):
         self.quic_client.connection_error.connect(self.monitor.statusBar.handle_server_disconnected)
 
         
+        from pkg.mqtt import MQTTClient
         self.mqtt_client=MQTTClient(self.setting)
         # controller 发送控制消息
         self.controller.controlMessage.connect(self.quic_client.send_control_message)

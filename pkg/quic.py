@@ -16,8 +16,6 @@ from aioquic.quic.events import ConnectionTerminated, DatagramFrameReceived, Qui
 from google.protobuf.message import Message
 import numpy as np
 
-from pkg.audio import AudioPlayer, AudioRecorder
-from pkg.codec import VideoDecoder, H264Encoder
 from pkg.fec import FECCodec
 from pkg.model import Setting
 from pkg.crc import calculate_uint16_crc8
@@ -153,6 +151,8 @@ class HighwayQuicClient(QObject):
         
         
         # 视频解码
+        from pkg.codec import VideoDecoder, H264Encoder
+
         self.h264_decoder_thread=QThread()
         self.h264_decoder_worker=VideoDecoder(format="h264")
         self.h264_decoder_worker.frame_decoded.connect(self.receive_video.emit)
@@ -178,6 +178,8 @@ class HighwayQuicClient(QObject):
         
         
         # 音频编码和播放
+        from pkg.audio import AudioPlayer, AudioRecorder
+
         self.audio_encoder_worker=AudioRecorder(format="g726")
         self.audio_player_worker=AudioPlayer(format="g726")
         self.audio_encoder_thread=QThread()

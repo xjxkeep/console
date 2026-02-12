@@ -12,7 +12,7 @@ from components.channel import ChannelGroup,ChannelDisp
 from pkg.model import Setting
 from protocol.highway_pb2 import Device, DeviceParam, Video
 from components.imu import IMUWidget
-from components.status import StatusBar, StatusPanel
+from components.status import StatusBar, StatusPanel, DashboardPanel
 from components.video import VideoPanel
 from components.wave import WaveformWidget
 from components.controller import ControlPanel
@@ -68,10 +68,12 @@ class Monitor(QWidget):
 
         # self.channelGroup=ChannelGroup(self.setting.channel_count,self.setting.channels,showFineTune=False,showReverse=False)
         self.statusPanel=StatusPanel()
+        self.dashboardPanel=DashboardPanel()
 
         # 设置右侧面板宽度一致
         panel_width = 350
         self.controlPanel.setFixedWidth(panel_width)
+        self.dashboardPanel.setFixedWidth(panel_width)
         self.statusPanel.setFixedWidth(panel_width)
 
         # 设置组件可以垂直扩展
@@ -85,6 +87,7 @@ class Monitor(QWidget):
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(10)
         right_layout.addWidget(self.statusPanel)
+        right_layout.addWidget(self.dashboardPanel)
         right_layout.addWidget(self.controlPanel, 1)  # stretch factor 1，让 controlPanel 占用剩余空间
 
         # 设置右侧面板宽度固定但高度可扩展
@@ -180,7 +183,7 @@ class Monitor(QWidget):
                 )
 
                 # 更新姿态球
-                self.statusPanel.update_attitude(data.imu_param)
+                self.dashboardPanel.update_attitude(data.imu_param)
             
         except Exception as e:
             logging.error(f"更新设备参数数据时出错: {e}")

@@ -7,9 +7,7 @@ from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import *
 from PyQt5.QtWidgets import QApplication
-import hid
 from qfluentwidgets import *
-import qrcode
 
 from pkg.hid_caller import HID
 from pkg.model import HIDBody
@@ -60,6 +58,7 @@ class QRCodeDisplay(QWidget):
     def setContent(self,content):
         self.content=content
         if self.content:
+            import qrcode
             qr = qrcode.QRCode(version=1, box_size=10, border=4)
             qr.add_data(self.content)
             qr.make(fit=True)
