@@ -24,3 +24,15 @@ clean:
 	rm -rf application
 
 rebuild: clean build
+
+# 用法: make release V=1.2.0
+release:
+ifndef V
+	$(error 请指定版本号, 例如: make release V=1.2.0)
+endif
+	@sed -i '' 's/^VERSION = ".*"/VERSION = "$(V)"/' pkg/version.py
+	@git add pkg/version.py
+	@git commit -m "release: v$(V)"
+	@git tag v$(V)
+	@echo "Done: pkg/version.py -> $(V), tag v$(V) created"
+	@echo "Run 'git push && git push origin v$(V)' to trigger release"

@@ -1,18 +1,15 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
-
-name: Python application
+name: Build & Release
 
 on:
   push:
     branches: [ "master" ]
     tags:
-      - 'v*'  # 支持版本标签触发
+      - 'v*'
   pull_request:
     branches: [ "master" ]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-windows:
@@ -49,11 +46,16 @@ jobs:
             --icon assets/images/logo.jpg `
             main.py
 
+      - name: Create NSIS installer
+        uses: joncloud/makensis-action@v4
+        with:
+          script-file: installer.nsi
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: console-windows
-          path: dist/console
+          path: AndlessConsole-Setup.exe
 
   build-macos:
     runs-on: macos-latest
@@ -61,9 +63,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install ffmpeg
+      - name: Install ffmpeg and create-dmg
         run: |
-          brew install ffmpeg
+          brew install ffmpeg create-dmg
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -89,11 +91,23 @@ jobs:
             --icon assets/images/logo.jpg \
             main.py
 
+      - name: Create DMG installer
+        run: |
+          create-dmg \
+            --volname "Andless Console" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "Andless Console.app" 150 190 \
+            --app-drop-link 450 190 \
+            "AndlessConsole.dmg" \
+            "dist/Andless Console.app"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: console-macos
-          path: dist/Andless Console.app
+          path: AndlessConsole.dmg
 
   build-linux:
     runs-on: ubuntu-latest
@@ -129,8 +143,71 @@ jobs:
             --noconsole \
             main.py
 
+      - name: Build .deb package
+        run: |
+          PKG_ROOT=deb_pkg
+          mkdir -p $PKG_ROOT/DEBIAN
+          mkdir -p $PKG_ROOT/opt/andless-console
+          mkdir -p $PKG_ROOT/usr/share/applications
+          mkdir -p $PKG_ROOT/usr/share/icons/hicolor/256x256/apps
+
+          cp -r dist/console/* $PKG_ROOT/opt/andless-console/
+          chmod +x $PKG_ROOT/opt/andless-console/console
+
+          # 桌面快捷方式
+          cat > $PKG_ROOT/usr/share/applications/andless-console.desktop << 'DESKTOP'
+          [Desktop Entry]
+          Name=Andless Console
+          Comment=Remote Control System
+          Exec=/opt/andless-console/console
+          Icon=andless-console
+          Terminal=false
+          Type=Application
+          Categories=Utility;
+          DESKTOP
+          sed -i 's/^          //' $PKG_ROOT/usr/share/applications/andless-console.desktop
+
+          # 图标
+          if [ -f assets/images/logo.jpg ]; then
+            cp assets/images/logo.jpg $PKG_ROOT/usr/share/icons/hicolor/256x256/apps/andless-console.jpg
+          fi
+
+          # control 文件
+          cat > $PKG_ROOT/DEBIAN/control << CTRL
+          Package: andless-console
+          Version: ${GITHUB_REF_NAME#v}
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Depends: ffmpeg
+          Maintainer: Andless Team
+          Description: Andless Console - Remote Control System
+          CTRL
+          sed -i 's/^          //' $PKG_ROOT/DEBIAN/control
+
+          dpkg-deb --build $PKG_ROOT andless-console.deb
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: console-linux
-          path: dist/console
+          path: andless-console.deb
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/console-windows/AndlessConsole-Setup.exe
+            artifacts/console-macos/AndlessConsole.dmg
+            artifacts/console-linux/andless-console.deb

@@ -3,7 +3,7 @@
 """
 
 # 版本号
-VERSION = "1.0.0"
+VERSION = "0.0.1"
 
 # 应用名称
 APP_NAME = "Andless Console"
