@@ -150,7 +150,10 @@ class Monitor(QWidget):
             
             # 更新内存利用率
             self.statusPanel.update_memory(data.memory_usage)
-            
+
+            # 更新磁盘使用率
+            self.statusPanel.update_disk_usage(data.disk_usage)
+
             # 更新信号强度 (将 dBm 转换为百分比)
             # RSSI 通常在 -30 dBm (最强) 到 -120 dBm (最弱) 之间
             if data.rssi_dbm >= -30:
