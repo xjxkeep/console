@@ -12,6 +12,8 @@ from qfluentwidgets import *
 from pkg.hid_caller import HID
 from pkg.model import HIDBody
 from components.common import BLineEdit, TLineEdit
+from components.terminal import TerminalPanel
+from protocol.highway_pb2 import Pty
 class InfoItem(QWidget):
     def __init__(self,parent=None,label=None,info=None,secret=False):
         super().__init__(parent)
@@ -180,23 +182,49 @@ class DeviceInfo(HeaderCardWidget):
 
 class SettingView(QWidget):
     hid_response=pyqtSignal(HIDBody)
+    send_to_pty = pyqtSignal(Pty)  # pty
+
     def __init__(self,parent=None):
         super().__init__(parent)
         self.setupUi()
-        
+
     def setupUi(self):
-        self.setObjectName("Setting")               
+        self.setObjectName("Setting")
         self.setLayout(QHBoxLayout())
-        self.deviceInfo=DeviceInfo()
-        self.hid=HIDDebug()
+
+        # 左侧布局：设备信息和终端
+        left_layout = QVBoxLayout()
+        self.deviceInfo = DeviceInfo()
+        self.terminal = TerminalPanel()
+        # 连接终端输入信号到外部信号
+        self.terminal.send_to_pty.connect(self.send_to_pty.emit)
+        left_layout.addWidget(self.deviceInfo)
+        left_layout.addWidget(self.terminal)
+
+        # 右侧：HID 调试
+        self.hid = HIDDebug()
         self.hid.hid_response.connect(self.hid_response)
         self.hid.hid_response.connect(self.deviceInfo.handler_hid_response)
-        self.layout().addWidget(self.deviceInfo)
+
+        # 添加到主布局
+        container_left = QWidget()
+        container_left.setLayout(left_layout)
+        self.layout().addWidget(container_left)
         self.layout().addWidget(self.hid)
-        
-        
-        
-        
+        self.layout().setStretch(0, 1)
+        self.layout().setStretch(1, 1)
+
+    def write(self,ptyData: Pty):
+        """接收远程 PTY 输出并显示
+
+        Args:
+            data: 来自远程 PTY 的数据
+        """
+        self.terminal.write(ptyData.data)
+
+    def send_window_size(self):
+        """发送当前窗口大小"""
+        self.terminal.send_window_size()
         
 if __name__ == "__main__":
     app=QApplication([])

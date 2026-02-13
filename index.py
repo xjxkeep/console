@@ -136,6 +136,8 @@ class MainWindow(FluentWindow):
         self.quic_client.connected.connect(self.monitor.statusBar.handle_server_connected)
         self.quic_client.connection_error.connect(self.monitor.statusBar.handle_server_disconnected)
 
+        self.quic_client.pty_data_received.connect(self.settingView.write)
+        self.settingView.send_to_pty.connect(self.quic_client.send_pty_message)
         
         from pkg.mqtt import MQTTClient
         self.mqtt_client=MQTTClient(self.setting)

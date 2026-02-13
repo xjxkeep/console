@@ -2,8 +2,7 @@ from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from collections.abc import Iterable as _Iterable, Mapping as _Mapping
-from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
+from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -39,6 +38,7 @@ class Device(_message.Message):
         VIDEO_FEEDBACK: _ClassVar[Device.MessageType]
         DATAGRAM: _ClassVar[Device.MessageType]
         STREAM_CONTROL: _ClassVar[Device.MessageType]
+        PTY: _ClassVar[Device.MessageType]
     VIDEO: Device.MessageType
     CONTROL: Device.MessageType
     REPORT: Device.MessageType
@@ -49,6 +49,7 @@ class Device(_message.Message):
     VIDEO_FEEDBACK: Device.MessageType
     DATAGRAM: Device.MessageType
     STREAM_CONTROL: Device.MessageType
+    PTY: Device.MessageType
     DEVICE_TYPE_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_TYPE_FIELD_NUMBER: _ClassVar[int]
     ID_FIELD_NUMBER: _ClassVar[int]
@@ -67,7 +68,7 @@ class Register(_message.Message):
     subscribe_device: Device
     token: str
     read_only: bool
-    def __init__(self, device: _Optional[_Union[Device, _Mapping]] = ..., subscribe_device: _Optional[_Union[Device, _Mapping]] = ..., token: _Optional[str] = ..., read_only: _Optional[bool] = ...) -> None: ...
+    def __init__(self, device: _Optional[_Union[Device, _Mapping]] = ..., subscribe_device: _Optional[_Union[Device, _Mapping]] = ..., token: _Optional[str] = ..., read_only: bool = ...) -> None: ...
 
 class Control(_message.Message):
     __slots__ = ("channels",)
@@ -167,7 +168,7 @@ class File(_message.Message):
     checksum: int
     block_id: int
     last_block: bool
-    def __init__(self, name: _Optional[str] = ..., offset: _Optional[int] = ..., total_size: _Optional[int] = ..., data: _Optional[bytes] = ..., checksum: _Optional[int] = ..., block_id: _Optional[int] = ..., last_block: _Optional[bool] = ...) -> None: ...
+    def __init__(self, name: _Optional[str] = ..., offset: _Optional[int] = ..., total_size: _Optional[int] = ..., data: _Optional[bytes] = ..., checksum: _Optional[int] = ..., block_id: _Optional[int] = ..., last_block: bool = ...) -> None: ...
 
 class Audio(_message.Message):
     __slots__ = ("raw", "timestamp", "counter")
@@ -196,7 +197,7 @@ class IMUParam(_message.Message):
     def __init__(self, gyroscope_x: _Optional[float] = ..., gyroscope_y: _Optional[float] = ..., gyroscope_z: _Optional[float] = ..., acceleration_x: _Optional[float] = ..., acceleration_y: _Optional[float] = ..., acceleration_z: _Optional[float] = ...) -> None: ...
 
 class DeviceParam(_message.Message):
-    __slots__ = ("timestamp", "imu_param", "temperature", "memory_usage", "cpu_usage", "power", "rssi_dbm", "voltage")
+    __slots__ = ("timestamp", "imu_param", "temperature", "memory_usage", "cpu_usage", "power", "rssi_dbm", "voltage", "disk_usage")
     TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
     IMU_PARAM_FIELD_NUMBER: _ClassVar[int]
     TEMPERATURE_FIELD_NUMBER: _ClassVar[int]
@@ -205,6 +206,7 @@ class DeviceParam(_message.Message):
     POWER_FIELD_NUMBER: _ClassVar[int]
     RSSI_DBM_FIELD_NUMBER: _ClassVar[int]
     VOLTAGE_FIELD_NUMBER: _ClassVar[int]
+    DISK_USAGE_FIELD_NUMBER: _ClassVar[int]
     timestamp: int
     imu_param: IMUParam
     temperature: float
@@ -213,7 +215,8 @@ class DeviceParam(_message.Message):
     power: int
     rssi_dbm: int
     voltage: float
-    def __init__(self, timestamp: _Optional[int] = ..., imu_param: _Optional[_Union[IMUParam, _Mapping]] = ..., temperature: _Optional[float] = ..., memory_usage: _Optional[float] = ..., cpu_usage: _Optional[float] = ..., power: _Optional[int] = ..., rssi_dbm: _Optional[int] = ..., voltage: _Optional[float] = ...) -> None: ...
+    disk_usage: float
+    def __init__(self, timestamp: _Optional[int] = ..., imu_param: _Optional[_Union[IMUParam, _Mapping]] = ..., temperature: _Optional[float] = ..., memory_usage: _Optional[float] = ..., cpu_usage: _Optional[float] = ..., power: _Optional[int] = ..., rssi_dbm: _Optional[int] = ..., voltage: _Optional[float] = ..., disk_usage: _Optional[float] = ...) -> None: ...
 
 class ClockSynchronizationParam(_message.Message):
     __slots__ = ("req_tx_ms", "req_rx_ms", "resp_tx_ms")
@@ -224,3 +227,13 @@ class ClockSynchronizationParam(_message.Message):
     req_rx_ms: int
     resp_tx_ms: int
     def __init__(self, req_tx_ms: _Optional[int] = ..., req_rx_ms: _Optional[int] = ..., resp_tx_ms: _Optional[int] = ...) -> None: ...
+
+class Pty(_message.Message):
+    __slots__ = ("window_width", "window_height", "data")
+    WINDOW_WIDTH_FIELD_NUMBER: _ClassVar[int]
+    WINDOW_HEIGHT_FIELD_NUMBER: _ClassVar[int]
+    DATA_FIELD_NUMBER: _ClassVar[int]
+    window_width: int
+    window_height: int
+    data: bytes
+    def __init__(self, window_width: _Optional[int] = ..., window_height: _Optional[int] = ..., data: _Optional[bytes] = ...) -> None: ...

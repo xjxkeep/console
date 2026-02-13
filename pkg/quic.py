@@ -29,6 +29,7 @@ from protocol.highway_pb2 import (
     Video,
     VideoFeedback,
     ClockSynchronizationParam,
+    Pty,
 )
 import threading
 
@@ -93,10 +94,11 @@ class HighwayQuicClient(QObject):
     download_speed = pyqtSignal(float)
     latency = pyqtSignal(int)
     file_send_progress = pyqtSignal(str,int)
-    
+
     video_stream_failed = pyqtSignal(str)
     control_stream_failed = pyqtSignal(str)
     input_wave_data = pyqtSignal(np.ndarray)
+    pty_data_received = pyqtSignal(Pty)  # pty
 
     device_param_ready = pyqtSignal(DeviceParam)
     
@@ -121,6 +123,8 @@ class HighwayQuicClient(QObject):
         self.datagram_writer = None
         self.video_reader = None
         self.video_writer = None
+        self.pty_reader = None
+        self.pty_writer = None
         self.loop = None  # 初始化loop属性
         self.running = False
         self.receive_video_count=0
@@ -131,6 +135,7 @@ class HighwayQuicClient(QObject):
         
         self.clock_offset=0
         self.control_stream_queue: Queue = Queue()
+        self.pty_stream_queue: Queue = Queue()
         self.latency_sum=0
         self.frame_latency_sum=0
         self.frame_slice_count=0
@@ -419,6 +424,7 @@ class HighwayQuicClient(QObject):
                     self.create_task(self.establish_datagram_stream())
                     self.create_task(self.establish_feedback_stream())
                     self.create_task(self.establish_ntp_stream())
+                    self.create_task(self.establish_pty_stream())
                     
                     # self.create_task(self.establish_audio_stream())
                     # self.audio_encoder_thread.start()
@@ -520,6 +526,16 @@ class HighwayQuicClient(QObject):
             read_task_func=self.__read_device_param_stream
         )
 
+    async def establish_pty_stream(self):
+        """Establish PTY stream for terminal data transfer"""
+        reader, writer = await self._establish_generic_stream(
+            stream_name="pty",
+            message_type=Device.MessageType.PTY,
+            read_task_func=self.__read_pty_stream
+        )
+        # PTY流需要创建发送任务
+        self.create_task(self.__send_pty_stream(writer=writer))
+
     async def __read_device_param_stream(self,reader:asyncio.StreamReader):
         while self.running:
             try:
@@ -533,6 +549,50 @@ class HighwayQuicClient(QObject):
             except Exception as e:
                 logging.error(f"读取设备参数流错误: {e}")
                 break
+
+    async def __read_pty_stream(self, reader: asyncio.StreamReader):
+        """Read incoming PTY data"""
+        try:
+            while self.running:
+                try:
+                    message = await asyncio.wait_for(self.receive_message(reader), timeout=1.0)
+                    pty = Pty.FromString(message)
+                    logging.info(f"receive pty message {pty}")
+                    self.pty_data_received.emit(pty)
+                except asyncio.TimeoutError:
+                    # 超时是正常的，继续循环检查running状态
+                    continue
+                except Exception as e:
+                    logging.error(f"读取PTY流错误: {e}")
+                    break
+        except asyncio.CancelledError:
+            logging.info("__read_pty_stream canceled")
+        except Exception as e:
+            logging.error(f"__read_pty_stream error: {e}")
+        finally:
+            logging.info("__read_pty_stream quit")
+
+    async def __send_pty_stream(self, writer: asyncio.StreamWriter):
+        """Send PTY data to remote"""
+        logging.info("__send_pty_stream task started")
+        try:
+            while self.running:
+                try:
+                    # 从队列获取PTY数据
+                    pty_data = await asyncio.wait_for(self.pty_stream_queue.get(), timeout=1.0)
+                    logging.info(f"send pty message {pty_data}")
+                    await self.send_message(writer=writer, message=pty_data)
+                except asyncio.TimeoutError:
+                    continue
+                except Exception as e:
+                    logging.error(f"发送PTY消息错误: {e}")
+                    break
+        except asyncio.CancelledError:
+            logging.info("__send_pty_stream canceled")
+        except Exception as e:
+            logging.error(f"__send_pty_stream error: {e}")
+        finally:
+            logging.info("__send_pty_stream task ended")
 
     async def establish_file_stream(self):
         await self._establish_generic_stream(
@@ -667,7 +727,25 @@ class HighwayQuicClient(QObject):
             if self.loop:
                 # logging.info("send control message:",values)
                 future = asyncio.run_coroutine_threadsafe(
-                    self.control_stream_queue.put(Control(channels=values)), 
+                    self.control_stream_queue.put(Control(channels=values)),
+                    self.loop
+                )
+                future.result()  # 等待操作完成
+
+    def send_pty_message(self, pty: Pty):
+        """Send PTY message to remote device
+
+        Args:
+            window_width: Terminal window width
+            window_height: Terminal window height
+            data: Terminal data bytes
+        """
+        logging.info(f"send pty message {pty.window_width} {pty.window_height} {len(pty.data)}")
+        if self.running and self.client:
+            self._ensure_loop()
+            if self.loop:
+                future = asyncio.run_coroutine_threadsafe(
+                    self.pty_stream_queue.put(pty),
                     self.loop
                 )
                 future.result()  # 等待操作完成
