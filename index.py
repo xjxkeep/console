@@ -94,11 +94,12 @@ class MainWindow(FluentWindow):
         
     def __init__(self):
         super().__init__()
-
+        # 修复与QtWebEngine的冲突
+        self.setMicaEffectEnabled(False)    
+        self.navigationInterface.setAcrylicEnabled(False)
         self.setting = Setting()
-        self.load_setting()
-        self._loadThemeSetting()  # 加载并应用主题设置
-        self.setupUi() 
+        self._loadThemeSetting()  # 在 UI 创建完成后再应用主题 
+        self.setupUi()
         
         # 初始化运行时间计时器
         self.uptime_timer = QTimer(self)
@@ -229,19 +230,7 @@ class MainWindow(FluentWindow):
         except Exception as e:
             logging.info(f"Unexpected error in _handle_hid_response: {e}")
 
-    def load_setting(self):
-        """加载设置 - 如果存在旧的 JSON 文件则迁移到 QSettings"""
-        try:
-            if os.path.exists(".setting.json"):
-                with open(".setting.json", "r") as f:
-                    self.setting = Setting.model_validate_json(f.read())
-                logging.info(f"Migrated settings from .setting.json")
-                # 迁移后删除旧文件
-                os.rename(".setting.json", ".setting.json.bak")
-                logging.info("Renamed .setting.json to .setting.json.bak")
-        except Exception as e:
-            logging.info(f"load setting error {e}")
-
+   
     def quic_client_connected(self):
         logging.info("quic client connected")
 

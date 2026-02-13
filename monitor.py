@@ -16,6 +16,7 @@ from components.status import StatusBar, StatusPanel, DashboardPanel
 from components.video import VideoPanel
 from components.wave import WaveformWidget
 from components.controller import ControlPanel
+from components.map import MapWidget
 
 
 # TODO imu 显示会导致无法resize窗口
@@ -69,55 +70,61 @@ class Monitor(QWidget):
         # self.channelGroup=ChannelGroup(self.setting.channel_count,self.setting.channels,showFineTune=False,showReverse=False)
         self.statusPanel=StatusPanel()
         self.dashboardPanel=DashboardPanel()
+        self.mapWidget=MapWidget()
 
         # 设置右侧面板宽度一致
         panel_width = 350
         self.controlPanel.setFixedWidth(panel_width)
-        self.dashboardPanel.setFixedWidth(panel_width)
-        self.statusPanel.setFixedWidth(panel_width)
+        self.mapWidget.setFixedWidth(panel_width)
 
         # 设置组件可以垂直扩展
         self.controlPanel.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
-        self.statusPanel.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
 
-        # 右侧面板：系统状态 + 实时控制 在同一列
+        # 右侧面板：地图 + 实时控制
         right_panel = QWidget()
         right_panel.setFixedWidth(panel_width)
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(10)
-        right_layout.addWidget(self.statusPanel)
-        right_layout.addWidget(self.dashboardPanel)
-        right_layout.addWidget(self.controlPanel, 1)  # stretch factor 1，让 controlPanel 占用剩余空间
-
-        # 设置右侧面板宽度固定但高度可扩展
+        right_layout.addWidget(self.mapWidget)
+        right_layout.addWidget(self.controlPanel, 1)
         right_panel.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
 
-        hlayout=QHBoxLayout()
+        # 左侧面板：视频 + 状态仪表盘 + 按钮（垂直排列）
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(10)
 
-        self.waveform.setMinimumWidth(200)
-        hlayout.addWidget(self.waveform)
-
-        # 设置视频面板可以扩展
+        # 视频面板
         self.display.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        left_layout.addWidget(self.display, 1)  # stretch=1，占用剩余空间
 
+        # 设备状态 + 仪表盘 水平排列
+        status_row = QWidget()
+        status_row_layout = QHBoxLayout(status_row)
+        status_row_layout.setContentsMargins(0, 0, 0, 0)
+        status_row_layout.setSpacing(10)
+        status_row_layout.addWidget(self.statusPanel)
+        status_row_layout.addWidget(self.dashboardPanel)
+        left_layout.addWidget(status_row)
+
+        # 按钮行
+        left_layout.addLayout(buttonLayout)
+
+        left_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        # 主布局
         main_layout = QGridLayout()
         main_layout.addWidget(self.statusBar, 0, 0, 1, 2)
-        main_layout.addWidget(self.display, 1, 0, 2, 1)
-        # main_layout.addLayout(hlayout,2,0)
-        main_layout.addLayout(buttonLayout, 3, 0)
-        main_layout.addWidget(right_panel, 1, 1, 2, 1)  # 移除 Qt.AlignTop
-        # 设置列拉伸因子：第0列（视频区域）可以拉伸，第1列（右侧面板）不拉伸
+        main_layout.addWidget(left_panel, 1, 0)
+        main_layout.addWidget(right_panel, 1, 1)
         main_layout.setColumnStretch(0, 1)
         main_layout.setColumnStretch(1, 0)
-        # 设置行拉伸因子：第1行和第2行（视频和右侧面板）可以拉伸
-        main_layout.setRowStretch(0, 0)  # statusBar 不拉伸
-        main_layout.setRowStretch(1, 1)  # 主内容区域拉伸
-        main_layout.setRowStretch(2, 1)  # 主内容区域拉伸
-        main_layout.setRowStretch(3, 0)  # 按钮行不拉伸
-        # main_layout.addWidget(self.channelGroup,1,2,2,1)
+        main_layout.setRowStretch(0, 0)
+        main_layout.setRowStretch(1, 1)
         self.setLayout(main_layout)
-        
+
         self.__frame = None
 
 

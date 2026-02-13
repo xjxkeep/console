@@ -6,7 +6,16 @@ import os
 import sys
 import time
 
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
+
+# 必须在 QApplication 创建之前设置属性
+QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
+QApplication.setAttribute(Qt.AA_UseDesktopOpenGL)
+
+# 必须在任何 QApplication 创建之前导入 QtWebEngineWidgets
+from PyQt5 import QtWebEngineWidgets
+
 from PyQt5.QtGui import QIcon
 
 from pkg.log_manager import log_manager
