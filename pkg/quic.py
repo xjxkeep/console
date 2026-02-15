@@ -187,14 +187,6 @@ class HighwayQuicClient(QObject):
 
         self.audio_encoder_worker=AudioRecorder(format="g726")
         self.audio_player_worker=AudioPlayer(format="g726")
-        self.audio_encoder_thread=QThread()
-        self.audio_player_thread=QThread()
-        self.audio_encoder_worker.moveToThread(self.audio_encoder_thread)
-        self.audio_player_worker.moveToThread(self.audio_player_thread)
-        self.audio_encoder_thread.started.connect(self.audio_encoder_worker.run_task)
-        self.audio_player_thread.started.connect(self.audio_player_worker.run_task)
-        self.audio_encoder_thread.finished.connect(self.audio_encoder_worker.deleteLater)
-        self.audio_player_thread.finished.connect(self.audio_player_worker.deleteLater)
         
 
         
@@ -336,17 +328,11 @@ class HighwayQuicClient(QObject):
             self.h265_decoder_thread.wait()
         logging.info("h265 video decoder closed")
         # 关闭音频编码器
-        if self.audio_encoder_thread.isRunning():
-            self.audio_encoder_thread.quit()
-            self.audio_encoder_worker.close()
-            self.audio_encoder_thread.wait()
+        self.audio_encoder_worker.close()
         logging.info("audio encoder closed")
-       
+
         # 关闭音频播放器
-        if self.audio_player_thread.isRunning():
-            self.audio_player_thread.quit()
-            self.audio_player_worker.close()
-            self.audio_player_thread.wait()
+        self.audio_player_worker.close()
         logging.info("audio player closed")
          # 关闭客户端连接
         if self.client:
@@ -427,8 +413,8 @@ class HighwayQuicClient(QObject):
                     self.create_task(self.establish_pty_stream())
                     
                     # self.create_task(self.establish_audio_stream())
-                    # self.audio_encoder_thread.start()
-                    # self.audio_player_thread.start()
+                    # self.audio_encoder_worker.start()
+                    # self.audio_player_worker.start()
                     # Keep connection alive
                     while self.running:
                         try:
@@ -653,7 +639,7 @@ class HighwayQuicClient(QObject):
                     logging.error(f"读取音频流错误: {e}")
                     break
                 if audio.raw:
-                    self.audio_player_worker.write(audio.raw)
+                    self.audio_player_worker.buffer.write(audio.raw)
         except asyncio.CancelledError:
             logging.error("__read_audio_stream canceled")
         except Exception as e:
@@ -668,7 +654,7 @@ class HighwayQuicClient(QObject):
         logging.info("__send_audio_stream starting to send data")
         try:
             while self.running:
-                data=await self.audio_encoder_worker.read_async()
+                data=await asyncio.get_event_loop().run_in_executor(None, self.audio_encoder_worker.buffer.read, 1024)
                 if len(data) == 0:
                     await asyncio.sleep(0.01)  # 短暂等待避免忙等待
                     continue

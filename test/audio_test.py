@@ -1,44 +1,39 @@
 import os
 import sys
+import signal
+import logging
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from pkg.audio import AudioRecorder,AudioPlayer
-import time
-from PyQt5.QtCore import QThread
-from PyQt5.QtWidgets import QApplication,QWidget
 
-class AudioTest(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Audio Test")
-        self.setGeometry(100,100,800,600)
-        self.show()
-        self.audio_recorder=AudioRecorder()
-        self.audio_thread=QThread()
-        self.audio_recorder.moveToThread(self.audio_thread)
-        self.audio_thread.started.connect(self.audio_recorder.run_task)
-        self.audio_thread.finished.connect(self.audio_recorder.deleteLater)
-        self.audio_thread.start()
-        
-        self.audio_player=AudioPlayer()
-        self.audio_player_thread=QThread()
-        self.audio_player.moveToThread(self.audio_player_thread)
-        self.audio_player_thread.started.connect(self.audio_player.run_task)
-        self.audio_player_thread.finished.connect(self.audio_player.deleteLater)
-        self.audio_player_thread.start()
-    
-        self.audio_recorder.frame_encoded.connect(self.receive_audio_frame)
-        
-        
-    def receive_audio_frame(self):
-        
-        data=self.audio_recorder.read(1024)
-        print("receive_audio_frame",len(data))
-        self.audio_player.write(data)
-        
-        
+from pkg.buffer import BytesBufferStream
+from pkg.audio import AudioRecorder, AudioPlayer
 
-app=QApplication(sys.argv)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-at=AudioTest()
-at.show()
-app.exec_()
+encoder_buffer = BytesBufferStream(maxSize=1024*1024*2, timeout=5)
+player_buffer = BytesBufferStream(maxSize=1024*1024*2, timeout=5)
+
+recorder = AudioRecorder(buffer=encoder_buffer, format="g726")
+player = AudioPlayer(buffer=player_buffer, format="g726")
+
+def on_frame_encoded():
+    data = encoder_buffer.read(1024)
+    if data:
+        player_buffer.write(data)
+
+recorder.on_frame_encoded = on_frame_encoded
+
+recorder.start()
+player.start()
+
+print("Audio test running — speak into mic to hear playback. Ctrl+C to stop.")
+
+try:
+    signal.pause()
+except KeyboardInterrupt:
+    pass
+finally:
+    print("\nShutting down...")
+    recorder.close()
+    player.close()
+    print("Done.")
