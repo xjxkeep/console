@@ -83,6 +83,78 @@ class BytesBufferStream:
 
 
      
+class AsyncBytesBufferStream:
+
+    def __init__(self, maxSize=1024 * 1024 * 20, timeout=None):
+        self.maxSize = maxSize
+        self.timeout = timeout
+        self.buffer = b''
+        self.running = True
+        self._lock = asyncio.Lock()
+        self._data_available = asyncio.Event()
+        self.total_size = 0
+
+    async def data_len(self):
+        async with self._lock:
+            return len(self.buffer)
+
+    async def read(self, n):
+        async with self._lock:
+            if not self.running:
+                return b''
+
+            if not self.buffer:
+                self._data_available.clear()
+                # Release lock while waiting for data
+                self._lock.release()
+                try:
+                    if self.timeout is not None:
+                        try:
+                            await asyncio.wait_for(
+                                self._data_available.wait(), timeout=self.timeout
+                            )
+                        except asyncio.TimeoutError:
+                            return b''
+                    else:
+                        await self._data_available.wait()
+                finally:
+                    await self._lock.acquire()
+
+                if not self.running:
+                    return b''
+
+            read_data = self.buffer[:n]
+            self.buffer = self.buffer[n:]
+            self.total_size -= len(read_data)
+
+            if not self.buffer:
+                self._data_available.clear()
+
+            return read_data
+
+    async def write(self, data):
+        if not self.running or not data:
+            return
+
+        async with self._lock:
+            self.buffer += data
+            self.total_size += len(data)
+
+            if self.maxSize > 0 and self.total_size > self.maxSize:
+                excess = self.total_size - self.maxSize
+                self.buffer = self.buffer[excess:]
+                self.total_size = self.maxSize
+
+            self._data_available.set()
+
+    async def close(self):
+        async with self._lock:
+            self.running = False
+            self.buffer = b''
+            self.total_size = 0
+            self._data_available.set()  # Wake up waiting readers
+
+
 class BufferStream:
     
     def __init__(self,maxSize=0,blocked=True,timeout=None):
