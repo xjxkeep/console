@@ -20,3 +20,4 @@ pyopengl
 pillow
 prometheus_client
 zfec
+PyQtWebEngine
