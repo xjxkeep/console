@@ -118,6 +118,22 @@ class Setting:
     def arch(self, value: str):
         self._manager.arch = value
 
+    @property
+    def p2p(self) -> bool:
+        return self._manager.p2p
+
+    @p2p.setter
+    def p2p(self, value: bool):
+        self._manager.p2p = value
+
+    @property
+    def room_id(self) -> str:
+        return self._manager.room_id
+
+    @room_id.setter
+    def room_id(self, value: str):
+        self._manager.room_id = value
+
     # MQTT 配置
     @property
     def mqtt_host(self) -> str:

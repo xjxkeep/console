@@ -2,9 +2,12 @@ import asyncio
 from asyncio import Queue
 from collections import deque
 import logging
+import traceback
 import os
+import socket
 import ssl
 import time
+from contextlib import asynccontextmanager
 from typing import List, cast
 
 from PyQt5.QtCore import QMetaObject, QObject, QThread, Qt, pyqtSignal, pyqtSlot, QTimer
@@ -12,6 +15,7 @@ from PyQt5.QtWidgets import QApplication
 from aioquic.asyncio.client import connect
 from aioquic.asyncio.protocol import QuicConnectionProtocol
 from aioquic.quic.configuration import QuicConfiguration
+from aioquic.quic.connection import QuicConnection
 from aioquic.quic.events import ConnectionTerminated, DatagramFrameReceived, QuicEvent
 from google.protobuf.message import Message
 import numpy as np
@@ -34,7 +38,58 @@ from protocol.highway_pb2 import (
 import threading
 
 
-class HighwayClientProtocol(QuicConnectionProtocol,QObject):
+@asynccontextmanager
+async def connect_over_socket(
+    sock: socket.socket,
+    host: str,
+    port: int,
+    *,
+    configuration: QuicConfiguration,
+    create_protocol=QuicConnectionProtocol,
+):
+    """
+    使用已有 UDP socket 建立 QUIC 连接（用于 P2P 打洞场景）。
+    打洞 socket 已与对端建立 NAT 映射，必须复用该 socket 才能直连。
+    """
+    loop = asyncio.get_running_loop()
+    addr = (host, port)
+    local_addr = sock.getsockname() if sock else None
+
+    logging.info(f"[P2P QUIC] 目标 {host}:{port}, 本地 socket {local_addr}, verify_mode={getattr(configuration, 'verify_mode', 'N/A')}")
+
+    if configuration.server_name is None:
+        configuration.server_name = host
+    connection = QuicConnection(configuration=configuration)
+
+    logging.info("[P2P QUIC] 创建 datagram endpoint...")
+    try:
+        transport, protocol = await loop.create_datagram_endpoint(
+            lambda: create_protocol(connection),
+            sock=sock,
+        )
+    except Exception as e:
+        logging.error(f"[P2P QUIC] create_datagram_endpoint 失败: {type(e).__name__}: {e}")
+        traceback.print_exc()
+        raise
+    protocol = cast(QuicConnectionProtocol, protocol)
+    logging.info("[P2P QUIC] endpoint 已创建，开始 QUIC 握手...")
+    try:
+        protocol.connect(addr, transmit=True)
+        logging.info("[P2P QUIC] 等待 TLS 握手完成...")
+        await protocol.wait_connected()
+        logging.info("[P2P QUIC] 握手成功")
+        yield protocol
+    except Exception as e:
+        logging.error(f"[P2P QUIC] 连接失败: {type(e).__name__}: {e}")
+        traceback.print_exc()
+        raise
+    finally:
+        protocol.close()
+        await protocol.wait_closed()
+        transport.close()
+
+
+class HighwayClientProtocol(QuicConnectionProtocol, QObject):
     quic_connection_lost = pyqtSignal()
     datagram_data_received = pyqtSignal()
     def __init__(self, *args, **kwargs) -> None:
@@ -127,6 +182,7 @@ class HighwayQuicClient(QObject):
         self.pty_writer = None
         self.loop = None  # 初始化loop属性
         self.running = False
+        self._p2p_puncher = None  # P2P 打洞器引用，用于 close 时发送结束信号
         self.receive_video_count=0
         self.upload_bytes = 0
         self.download_bytes = 0
@@ -294,10 +350,17 @@ class HighwayQuicClient(QObject):
         finally:
             self.loop.close()
 
+    def stop_p2p(self) -> None:
+        """发送 P2P 打洞结束信号，用于窗口关闭时中止正在进行的打洞。"""
+        if self._p2p_puncher:
+            self._p2p_puncher.stop()
+            logging.info("P2P 打洞已发送结束信号")
+
     def close(self):
         """Stop the client and cleanup resources"""
         if not self.running:
             return
+        self.stop_p2p()
         self.disconnect()
         self.running = False
         
@@ -386,14 +449,38 @@ class HighwayQuicClient(QObject):
        
         while self.running:
             try:
-                
-                logging.info(f"connecting quic server, running {self.running}")
-                async with connect(
-                    self.setting.host,
-                    self.setting.port,
-                    configuration=self.configuration,
-                    create_protocol=HighwayClientProtocol,
-                ) as client:
+                # P2P 模式：先打洞获取 socket 和对端地址
+                if getattr(self.setting, "p2p", False):
+                    logging.info("P2P 模式：开始打洞...")
+                    from pkg.p2p import create_puncher_from_setting
+                    puncher = create_puncher_from_setting(self.setting)
+                    self._p2p_puncher = puncher
+                    result = await asyncio.to_thread(puncher.run)
+                    if not result:
+                        logging.error("P2P 打洞失败")
+                        self.connection_error.emit("P2P 打洞失败")
+                        await asyncio.sleep(5.0)
+                        continue
+                    sock, (peer_host, peer_port) = result
+                    logging.info(f"P2P 打洞成功，连接 {peer_host}:{peer_port}")
+                    time.sleep(0.1)
+                    connect_ctx = connect_over_socket(
+                        sock,
+                        peer_host,
+                        peer_port,
+                        configuration=self.configuration,
+                        create_protocol=HighwayClientProtocol,
+                    )
+                else:
+                    logging.info(f"connecting quic server, running {self.running}")
+                    connect_ctx = connect(
+                        self.setting.host,
+                        self.setting.port,
+                        configuration=self.configuration,
+                        create_protocol=HighwayClientProtocol,
+                    )
+
+                async with connect_ctx as client:
                     logging.info("connected quic server")
                     self.client = cast(HighwayClientProtocol, client)
                     self.client.datagram_data_received.connect(self.__parse_datagram)
@@ -429,12 +516,16 @@ class HighwayQuicClient(QObject):
                     
                         
             except Exception as e:
-                logging.error(f"connect error: {e}")
+                logging.error(f"connect error: {type(e).__name__}: {e!r}")
+                logging.error(f"connect traceback:\n{traceback.format_exc()}")
                 if self.client:
-                    self.client.close()
-                    await self.client.wait_closed()
+                    try:
+                        self.client.close()
+                        await self.client.wait_closed()
+                    except Exception:
+                        pass
                 self.clear_tasks()
-                
+
                 logging.info("tasks cleared!")
 
 

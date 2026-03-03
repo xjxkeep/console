@@ -26,6 +26,8 @@ class SettingsManager:
         "device/channel_count": 10,
         "device/token": "0",
         "device/arch": "x86_64",
+        "device/p2p": False,
+        "device/room_id": "",
 
         # MQTT 配置
         "mqtt/host": "stream.api.andless.tech",
@@ -184,6 +186,22 @@ class SettingsManager:
     def arch(self, value: str):
         self.set("device/arch", value)
 
+    @property
+    def p2p(self) -> bool:
+        return self.get("device/p2p")
+
+    @p2p.setter
+    def p2p(self, value: bool):
+        self.set("device/p2p", value)
+
+    @property
+    def room_id(self) -> str:
+        return self.get("device/room_id")
+
+    @room_id.setter
+    def room_id(self, value: str):
+        self.set("device/room_id", value)
+
     # MQTT 配置
     @property
     def mqtt_host(self) -> str:
@@ -299,6 +317,8 @@ class SettingsManager:
             "channel_count": self.channel_count,
             "token": self.token,
             "arch": self.arch,
+            "p2p": self.p2p,
+            "room_id": self.room_id,
             "mqtt_host": self.mqtt_host,
             "mqtt_port": self.mqtt_port,
             "mqtt_setting_topic": self.mqtt_setting_topic,
@@ -323,6 +343,8 @@ class SettingsManager:
             "channel_count": "device/channel_count",
             "token": "device/token",
             "arch": "device/arch",
+            "p2p": "device/p2p",
+            "room_id": "device/room_id",
             "mqtt_host": "mqtt/host",
             "mqtt_port": "mqtt/port",
             "mqtt_setting_topic": "mqtt/setting_topic",

@@ -260,6 +260,7 @@ class MainWindow(FluentWindow):
 
         self.mqtt_client.close()
         logging.info("mqtt client closed")
+        self.quic_client.stop_p2p()  # 发送 P2P 打洞结束信号
         self.quic_client.close()
         logging.info("quic client closed")
 
