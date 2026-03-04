@@ -172,10 +172,16 @@ jobs:
             cp assets/images/logo.jpg $PKG_ROOT/usr/share/icons/hicolor/256x256/apps/andless-console.jpg
           fi
 
-          # control 文件
+          # control 文件：版本号必须以数字开头，非 tag 时使用 0.0.0-dev
+          if [[ "$GITHUB_REF_NAME" == v* ]]; then
+            PKG_VERSION="${GITHUB_REF_NAME#v}"
+          else
+            PKG_VERSION="0.0.0-dev"
+          fi
+
           cat > $PKG_ROOT/DEBIAN/control << CTRL
           Package: andless-console
-          Version: ${GITHUB_REF_NAME#v}
+          Version: ${PKG_VERSION}
           Section: utils
           Priority: optional
           Architecture: amd64
