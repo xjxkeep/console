@@ -52,13 +52,25 @@ async def connect_over_socket(
     打洞 socket 已与对端建立 NAT 映射，必须复用该 socket 才能直连。
     """
     loop = asyncio.get_running_loop()
-    addr = (host, port)
+    # AF_INET6 socket 的 recvfrom 返回 4-tuple (host, port, flowinfo, scope_id)，
+    # 必须与 connect() 传入的地址格式一致，否则 aioquic 的 _find_network_path()
+    # 会因 2-tuple != 4-tuple 而创建新的未验证 path，导致握手超时。
+    if sock and sock.family == socket.AF_INET6:
+        addr = (host, port, 0, 0)
+    else:
+        addr = (host, port)
     local_addr = sock.getsockname() if sock else None
 
     logging.info(f"[P2P QUIC] 目标 {host}:{port}, 本地 socket {local_addr}, verify_mode={getattr(configuration, 'verify_mode', 'N/A')}")
 
     if configuration.server_name is None:
-        configuration.server_name = host
+        # IP 地址不适合作为 TLS SNI (RFC 6066)，使用通用名称
+        import ipaddress as _ipa
+        try:
+            _ipa.ip_address(host)
+            configuration.server_name = "p2p"
+        except ValueError:
+            configuration.server_name = host
     connection = QuicConnection(configuration=configuration)
 
     logging.info("[P2P QUIC] 创建 datagram endpoint...")
