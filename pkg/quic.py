@@ -157,6 +157,9 @@ class HighwayQuicClient(QObject):
     connected = pyqtSignal()  # 新增连接状态信号
     connection_error = pyqtSignal(str)  # 新增错误信号
     
+    p2p_connected = pyqtSignal()
+    p2p_disconnected = pyqtSignal()
+
     upload_speed = pyqtSignal(float)
     download_speed = pyqtSignal(float)
     latency = pyqtSignal(int)
@@ -173,12 +176,19 @@ class HighwayQuicClient(QObject):
     def __init__(self, setting:Setting) -> None:
         super().__init__()
         self.setting=setting
-        self.client = None
+
+        # 公网连接
+        self.public_client: HighwayClientProtocol | None = None
+        # P2P 连接
+        self.p2p_client: HighwayClientProtocol | None = None
+        self._p2p_tasks: List[asyncio.Task] = []
+
+        # 公网侧 readers/writers
         self.reader = None
         self.writer = None
         self.ntp_reader = None
         self.ntp_writer = None
-        self.feedback_reader = None 
+        self.feedback_reader = None
         self.feedback_writer = None
         self.control_reader = None
         self.control_writer = None
@@ -192,6 +202,17 @@ class HighwayQuicClient(QObject):
         self.video_writer = None
         self.pty_reader = None
         self.pty_writer = None
+
+        # P2P 侧 writers（用于写路由）
+        self.p2p_control_writer = None
+        self.p2p_video_writer = None
+        self.p2p_pty_writer = None
+        self.p2p_file_writer = None
+        self.p2p_feedback_writer = None
+        self.p2p_ntp_writer = None
+        self.p2p_imu_writer = None
+        self.p2p_datagram_writer = None
+
         self.loop = None  # 初始化loop属性
         self.running = False
         self._p2p_puncher = None  # P2P 打洞器引用，用于 close 时发送结束信号
@@ -261,14 +282,26 @@ class HighwayQuicClient(QObject):
         self.tasks: List[asyncio.Task] = []
         
 
+    @property
+    def client(self) -> HighwayClientProtocol | None:
+        """返回当前最优连接：P2P 优先，否则公网"""
+        if self.p2p_client and not self.p2p_client._connection_lost:
+            return self.p2p_client
+        return self.public_client
+
+    @client.setter
+    def client(self, value):
+        """兼容旧代码的 self.client = xxx 赋值，写入 public_client"""
+        self.public_client = value
+
     def reconnect_video_stream(self):
         logging.info("reconnect video stream")
-        if self.client:
+        if self.public_client:
             self.create_task(self.establish_video_stream())
 
     def reconnect_control_stream(self):
         logging.info("reconnect control stream")
-        if self.client:
+        if self.public_client:
             self.create_task(self.establish_control_stream())
 
 
@@ -373,14 +406,16 @@ class HighwayQuicClient(QObject):
         if not self.running:
             return
         self.stop_p2p()
-        self.disconnect()
         self.running = False
-        
+
+        # 取消 P2P tasks 并清理
+        self._cleanup_p2p()
+
         # 取消所有异步任务
         for task in self.tasks:
             if not task.done():
                 task.cancel()
-        
+
         # 关闭视频编码器
         if self.video_encoder_thread.isRunning():
             self.video_encoder_thread.quit()
@@ -409,18 +444,26 @@ class HighwayQuicClient(QObject):
         # 关闭音频播放器
         self.audio_player_worker.close()
         logging.info("audio player closed")
-         # 关闭客户端连接
-        if self.client:
+        # 关闭 P2P 客户端连接
+        if self.p2p_client:
             try:
-                self.client.close()
-                # 使用asyncqt的run_until_complete
-                self.loop.create_task(self.client.wait_closed())
-                logging.info("client closed")
+                self.p2p_client.close()
+                self.loop.create_task(self.p2p_client.wait_closed())
+                logging.info("p2p client closed")
+            except Exception as e:
+                logging.error(f"关闭P2P客户端时出错: {e}")
+            self.p2p_client = None
+        # 关闭公网客户端连接
+        if self.public_client:
+            try:
+                self.public_client.close()
+                self.loop.create_task(self.public_client.wait_closed())
+                logging.info("public client closed")
             except Exception as e:
                 logging.error(f"关闭客户端时出错: {e}")
-                # 强制关闭
-                if hasattr(self.client, '_quic'):
-                    self.client._quic.close()
+                if hasattr(self.public_client, '_quic'):
+                    self.public_client._quic.close()
+            self.public_client = None
         # 停止线程和事件循环
         if hasattr(self, '_thread') and self._thread.isRunning():
             self._thread.quit()
@@ -439,12 +482,18 @@ class HighwayQuicClient(QObject):
             await asyncio.sleep(1.0)
     
 
-    def connection_lost(self):
-        logging.info("connection lost")
-        self.running=False
-        self.client=None
+    def _on_public_connection_lost(self):
+        """公网连接断开：清理 P2P，停止所有连接"""
+        logging.info("public connection lost")
+        self.running = False
+
+        # 同时清理 P2P
+        self.p2p_client = None
+        self._cleanup_p2p()
+
+        self.public_client = None
         self.connection_error.emit("quic lost")
-        
+
         # 清理所有任务
         self.clear_tasks()
 
@@ -458,47 +507,22 @@ class HighwayQuicClient(QObject):
     
     async def run(self):
         """Establish QUIC connection"""
-       
+
         while self.running:
             try:
-                # P2P 模式：先打洞获取 socket 和对端地址
-                if getattr(self.setting, "p2p", False):
-                    logging.info("P2P 模式：开始打洞...")
-                    from pkg.p2p import create_puncher_from_setting
-                    puncher = create_puncher_from_setting(self.setting)
-                    self._p2p_puncher = puncher
-                    result = await asyncio.to_thread(puncher.run)
-                    if not result:
-                        logging.error("P2P 打洞失败")
-                        self.connection_error.emit("P2P 打洞失败")
-                        await asyncio.sleep(5.0)
-                        continue
-                    sock, (peer_host, peer_port) = result
-                    logging.info(f"P2P 打洞成功，连接 {peer_host}:{peer_port}")
-                    time.sleep(0.1)
-                    connect_ctx = connect_over_socket(
-                        sock,
-                        peer_host,
-                        peer_port,
-                        configuration=self.configuration,
-                        create_protocol=HighwayClientProtocol,
-                    )
-                else:
-                    logging.info(f"connecting quic server, running {self.running}")
-                    connect_ctx = connect(
-                        self.setting.host,
-                        self.setting.port,
-                        configuration=self.configuration,
-                        create_protocol=HighwayClientProtocol,
-                    )
-
-                async with connect_ctx as client:
+                # 始终连接公网服务器
+                logging.info(f"connecting quic server, running {self.running}")
+                async with connect(
+                    self.setting.host,
+                    self.setting.port,
+                    configuration=self.configuration,
+                    create_protocol=HighwayClientProtocol,
+                ) as client:
                     logging.info("connected quic server")
-                    self.client = cast(HighwayClientProtocol, client)
-                    self.client.datagram_data_received.connect(self.__parse_datagram)
-
-                    
-                    self.client.quic_connection_lost.connect(self.connection_lost)
+                    self.public_client = cast(HighwayClientProtocol, client)
+                    self.public_client.datagram_data_received.connect(
+                        lambda: self._parse_datagram_from(self.public_client))
+                    self.public_client.quic_connection_lost.connect(self._on_public_connection_lost)
                     self.connected.emit()
                     self.create_task(self.__update_speed())
                     self.create_task(self.__metric_collect())
@@ -510,30 +534,26 @@ class HighwayQuicClient(QObject):
                     self.create_task(self.establish_feedback_stream())
                     self.create_task(self.establish_ntp_stream())
                     self.create_task(self.establish_pty_stream())
-                    
-                    # self.create_task(self.establish_audio_stream())
-                    # self.audio_encoder_worker.start()
-                    # self.audio_player_worker.start()
+
+                    # 如果 P2P 开启，启动后台 P2P 连接协程
+                    if getattr(self.setting, "p2p", False):
+                        self.create_task(self._run_p2p_loop())
+
                     # Keep connection alive
                     while self.running:
                         try:
-                            # 优化: 移除 ping()，依赖 idle_timeout/datagrams/streams keep-alive
-                            # 频繁 ping 在高负载下可能导致不必要的开销
                             await asyncio.sleep(1.0)
-                            
-                                
                         except Exception as e:
                             logging.info(f"Keep-alive check error: {e}")
                             break
-                    
-                        
+
             except Exception as e:
                 logging.error(f"connect error: {type(e).__name__}: {e!r}")
                 logging.error(f"connect traceback:\n{traceback.format_exc()}")
-                if self.client:
+                if self.public_client:
                     try:
-                        self.client.close()
-                        await self.client.wait_closed()
+                        self.public_client.close()
+                        await self.public_client.wait_closed()
                     except Exception:
                         pass
                 self.clear_tasks()
@@ -555,23 +575,182 @@ class HighwayQuicClient(QObject):
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
 
-    async def _establish_generic_stream(self, stream_name, message_type, read_task_func=None, need_subscribe=True, subscribe_id=None):
+    async def _run_p2p_loop(self):
+        """P2P 后台连接 + 重试循环"""
+        retry_delay = 5.0
+        while self.running and getattr(self.setting, "p2p", False):
+            try:
+                # 1. P2P 打洞
+                logging.info("P2P 模式：开始打洞...")
+                from pkg.p2p import create_puncher_from_setting
+                puncher = create_puncher_from_setting(self.setting)
+                self._p2p_puncher = puncher
+                result = await asyncio.to_thread(puncher.run)
+                if not result:
+                    logging.error("P2P 打洞失败，稍后重试")
+                    await asyncio.sleep(retry_delay)
+                    continue
+
+                sock, (peer_host, peer_port) = result
+                logging.info(f"P2P 打洞成功，连接 {peer_host}:{peer_port}")
+                await asyncio.sleep(0.1)
+
+                # 2. 使用独立的 QuicConfiguration 建立 P2P QUIC 连接
+                p2p_configuration = QuicConfiguration(
+                    alpn_protocols=["HLD"],
+                    is_client=True,
+                    max_datagram_frame_size=65536,
+                    max_datagram_size=1200,
+                    idle_timeout=30,
+                )
+                p2p_configuration.verify_mode = ssl.CERT_NONE
+
+                async with connect_over_socket(
+                    sock,
+                    peer_host,
+                    peer_port,
+                    configuration=p2p_configuration,
+                    create_protocol=HighwayClientProtocol,
+                ) as p2p_client:
+                    self.p2p_client = cast(HighwayClientProtocol, p2p_client)
+                    self.p2p_client.datagram_data_received.connect(
+                        lambda: self._parse_datagram_from(self.p2p_client))
+                    self.p2p_connected.emit()
+                    logging.info("P2P 连接已建立")
+
+                    # 3. 在 P2P 连接上建立所有 streams（read tasks 并行读，汇入同一信号）
+                    await self._establish_all_streams_on_p2p()
+
+                    # 4. 等待 P2P 连接断开
+                    p2p_lost = asyncio.Event()
+                    self.p2p_client.quic_connection_lost.connect(lambda: p2p_lost.set())
+                    await p2p_lost.wait()
+
+                # 5. P2P 断开，清理
+                logging.info("P2P 连接已断开")
+                self.p2p_client = None
+                self._cleanup_p2p()
+                self.p2p_disconnected.emit()
+
+            except asyncio.CancelledError:
+                self.p2p_client = None
+                self._cleanup_p2p()
+                return
+            except Exception as e:
+                logging.error(f"P2P 连接异常: {type(e).__name__}: {e}")
+                logging.error(traceback.format_exc())
+                self.p2p_client = None
+                self._cleanup_p2p()
+
+            await asyncio.sleep(retry_delay)  # 重试
+
+    async def _establish_all_streams_on_p2p(self):
+        """在 P2P 连接上建立所有 streams，read tasks 与公网并行读"""
+        p2p = self.p2p_client
+
+        # video — 需要 read task
+        await self._establish_generic_stream(
+            stream_name="video", message_type=Device.MessageType.VIDEO,
+            client=p2p, attr_prefix="p2p_",
+        )
+        task = self.loop.create_task(self.__read_video_stream(reader=self.p2p_video_reader))
+        self._p2p_tasks.append(task)
+
+        # control — 不需要 read task（只写）
+        await self._establish_generic_stream(
+            stream_name="control", message_type=Device.MessageType.CONTROL,
+            need_subscribe=False, client=p2p, attr_prefix="p2p_",
+        )
+
+        # file
+        await self._establish_generic_stream(
+            stream_name="file", message_type=Device.MessageType.FILE,
+            client=p2p, attr_prefix="p2p_",
+        )
+
+        # imu — 需要 read task
+        await self._establish_generic_stream(
+            stream_name="imu", message_type=Device.MessageType.DEVICEPARAM,
+            client=p2p, attr_prefix="p2p_",
+        )
+        task = self.loop.create_task(self.__read_device_param_stream(reader=self.p2p_imu_reader))
+        self._p2p_tasks.append(task)
+
+        # datagram
+        await self._establish_generic_stream(
+            stream_name="datagram", message_type=Device.MessageType.DATAGRAM,
+            client=p2p, attr_prefix="p2p_",
+        )
+
+        # feedback
+        await self._establish_generic_stream(
+            stream_name="feedback", message_type=Device.MessageType.VIDEO_FEEDBACK,
+            client=p2p, attr_prefix="p2p_",
+        )
+
+        # ntp
+        if self.setting.subscribe_id != self.setting.device_id:
+            await self._establish_generic_stream(
+                stream_name="ntp", message_type=Device.MessageType.CLOCKSYNCHRONIZATIONPARAM,
+                client=p2p, attr_prefix="p2p_",
+            )
+            task = self.loop.create_task(self.__send_ntp_message(writer=self.p2p_ntp_writer))
+            self._p2p_tasks.append(task)
+            task = self.loop.create_task(self.__read_ntp_stream(reader=self.p2p_ntp_reader))
+            self._p2p_tasks.append(task)
+
+        # pty — 需要 read task
+        await self._establish_generic_stream(
+            stream_name="pty", message_type=Device.MessageType.PTY,
+            client=p2p, attr_prefix="p2p_",
+        )
+        task = self.loop.create_task(self.__read_pty_stream(reader=self.p2p_pty_reader))
+        self._p2p_tasks.append(task)
+
+        logging.info("P2P 所有 streams 建立完成")
+
+    def _cleanup_p2p(self):
+        """清理 P2P 连接资源"""
+        # 取消 P2P 侧 tasks
+        for task in self._p2p_tasks:
+            if not task.done():
+                task.cancel()
+        self._p2p_tasks = []
+
+        # 清理 P2P 侧 writers/readers
+        for stream_name in ["control", "video", "pty", "file", "feedback", "ntp", "imu", "datagram"]:
+            setattr(self, f"p2p_{stream_name}_writer", None)
+            setattr(self, f"p2p_{stream_name}_reader", None)
+
+    def _get_writer(self, stream_name):
+        """返回当前应使用的 writer：P2P 优先，否则公网"""
+        p2p_writer = getattr(self, f"p2p_{stream_name}_writer", None)
+        if self.p2p_client and not self.p2p_client._connection_lost and p2p_writer:
+            return p2p_writer
+        return getattr(self, f"{stream_name}_writer", None)
+
+    async def _establish_generic_stream(self, stream_name, message_type, read_task_func=None, need_subscribe=True, subscribe_id=None, client=None, attr_prefix=""):
         """通用的流建立方法，减少重复代码
-        
+
         Args:
             stream_name: 流名称
             message_type: 消息类型
             read_task_func: 读取任务函数
             need_subscribe: 是否需要订阅设备
+            client: QUIC 客户端连接，默认使用 public_client
+            attr_prefix: 属性前缀，P2P 侧传 "p2p_"
         """
+        if client is None:
+            client = self.public_client
+
         # 创建流
-        reader_attr = f"{stream_name}_reader"
-        writer_attr = f"{stream_name}_writer"
+        reader_attr = f"{attr_prefix}{stream_name}_reader"
+        writer_attr = f"{attr_prefix}{stream_name}_writer"
         setattr(self, reader_attr, None)
         setattr(self, writer_attr, None)
-        
+
         try:
-            reader, writer = await self.client.create_stream(False)
+            reader, writer = await client.create_stream(False)
             setattr(self, reader_attr, reader)
             setattr(self, writer_attr, writer)
             
@@ -669,8 +848,9 @@ class HighwayQuicClient(QObject):
                 try:
                     # 从队列获取PTY数据
                     pty_data = await asyncio.wait_for(self.pty_stream_queue.get(), timeout=1.0)
+                    w = self._get_writer("pty") or writer
                     logging.info(f"send pty message {pty_data}")
-                    await self.send_message(writer=writer, message=pty_data)
+                    await self.send_message(writer=w, message=pty_data)
                 except asyncio.TimeoutError:
                     continue
                 except Exception as e:
@@ -699,14 +879,15 @@ class HighwayQuicClient(QObject):
         with open(filePath, "rb") as f:
             fileName=os.path.basename(filePath)
             fileSize=os.stat(filePath).st_size
-            await self.send_message(writer=self.file_writer,message=File(name=fileName,size=fileSize))
+            w = self._get_writer("file") or self.file_writer
+            await self.send_message(writer=w,message=File(name=fileName,size=fileSize))
             sendSize=0
             while True:
                 data=f.read(1024)
                 if len(data)==0:
                     break
-                self.file_writer.write(data)
-                await self.file_writer.drain()
+                w.write(data)
+                await w.drain()
                 sendSize+=len(data)
                 self.file_send_progress.emit(fileName,round(sendSize*100/fileSize))
 
@@ -857,8 +1038,9 @@ class HighwayQuicClient(QObject):
     async def __send_ntp_message(self,writer:asyncio.StreamWriter):
         while self.running:
             try:
+                w = self._get_writer("ntp") or writer
                 ntp_param = ClockSynchronizationParam(req_tx_ms=int(time.time()*1000))
-                await self.send_message(writer=writer,message=ntp_param)
+                await self.send_message(writer=w,message=ntp_param)
                 await asyncio.sleep(1)
             except Exception as e:
                 logging.error(f"发送NTP消息错误: {e}")
@@ -870,8 +1052,8 @@ class HighwayQuicClient(QObject):
                 message = await asyncio.wait_for(self.receive_message(reader), timeout=1.0)
                 ntp_param = ClockSynchronizationParam.FromString(message)
                 self.clock_offset=round(((ntp_param.req_rx_ms-ntp_param.req_tx_ms)+(ntp_param.resp_tx_ms-int(time.time()*1000)))/2)
-                # logging.debug(f"receive ntp param message {ntp_param} clock_offset {self.clock_offset}")
-                await self.send_message(writer=self.ntp_writer,message=ntp_param,flush=False)
+                w = self._get_writer("ntp") or self.ntp_writer
+                await self.send_message(writer=w,message=ntp_param,flush=False)
             except asyncio.TimeoutError:
                 continue
             except Exception as e:
@@ -903,7 +1085,8 @@ class HighwayQuicClient(QObject):
     async def __send_feedback_message(self,writer:asyncio.StreamWriter):
         while self.running:
             try:
-                await self.send_message(writer=writer, message=VideoFeedback(received_frame_index=self.receive_video_count), flush=False)
+                w = self._get_writer("feedback") or writer
+                await self.send_message(writer=w, message=VideoFeedback(received_frame_index=self.receive_video_count), flush=False)
                 await asyncio.sleep(0.2)
                 logging.debug(f"send feedback message {self.receive_video_count}")
             except Exception as e:
@@ -932,8 +1115,8 @@ class HighwayQuicClient(QObject):
             while self.running:
                 try:
                     message = await asyncio.wait_for(self.control_stream_queue.get(), timeout=1.0)
-                    # logging.info("send control message channels:",message.channels )
-                    await self.send_message(writer=writer,message=message)
+                    w = self._get_writer("control") or writer
+                    await self.send_message(writer=w,message=message)
                 except asyncio.TimeoutError:
                     # 超时是正常的，继续循环检查running状态
                     continue
@@ -957,7 +1140,8 @@ class HighwayQuicClient(QObject):
 
     def send_video_test_stream_data(self):
         data = self.video_encoder_worker.read_frame()
-        if self.running and self.video_writer:
+        w = self._get_writer("video")
+        if self.running and w:
             self._ensure_loop()
             if self.loop:
                 video=Video(raw=data,timestamp=int(time.time()*1000),slice_count=1,slice_id=1)
@@ -971,7 +1155,7 @@ class HighwayQuicClient(QObject):
                     logging.debug(f"illegal nalu length: {len(data)}")
                 
                 future = asyncio.run_coroutine_threadsafe(
-                    self.send_message(writer=self.video_writer, message=video),
+                    self.send_message(writer=w, message=video),
                     self.loop
                 )
                 future.result()  # Wait for completion
@@ -1020,15 +1204,16 @@ class HighwayQuicClient(QObject):
     
     
     
-    def __parse_datagram(self):
-        data=self.client.receive_datagram()
+    def _parse_datagram_from(self, client: HighwayClientProtocol):
+        """从指定 client 读取 datagram 并解析（公网和 P2P 共用）"""
+        data = client.receive_datagram()
         if data is None:
             return
-        self.download_bytes+=len(data)
-        header=data[:4]
-        length = (header[2]&0xff | (header[3]&0xff)<<8)
-        data=data[4:4+length]
-        
+        self.download_bytes += len(data)
+        header = data[:4]
+        length = (header[2] & 0xff | (header[3] & 0xff) << 8)
+        data = data[4:4 + length]
+
         self.__parse_video_data(data)
         
         
