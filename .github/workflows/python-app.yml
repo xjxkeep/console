@@ -280,6 +280,7 @@ jobs:
           OSS_DIR="${{ steps.oss-path.outputs.dir }}"
           BUCKET="${{ secrets.OSS_BUCKET }}"
           ENDPOINT="${{ secrets.OSS_ENDPOINT }}"
-          ossutil cp artifacts/console-windows/AndlessConsole-Setup.exe "oss://${BUCKET}/${OSS_DIR}/AndlessConsole-Setup.exe" --endpoint="${ENDPOINT}" --force
-          ossutil cp artifacts/console-macos/AndlessConsole.dmg "oss://${BUCKET}/${OSS_DIR}/AndlessConsole.dmg" --endpoint="${ENDPOINT}" --force
-          ossutil cp artifacts/console-linux/andless-console.deb "oss://${BUCKET}/${OSS_DIR}/andless-console.deb" --endpoint="${ENDPOINT}" --force
+          REGION=$(echo "$ENDPOINT" | sed 's/^oss-//;s/\.aliyuncs\.com$//')
+          ossutil cp artifacts/console-windows/AndlessConsole-Setup.exe "oss://${BUCKET}/${OSS_DIR}/AndlessConsole-Setup.exe" --endpoint="${ENDPOINT}" --region="${REGION}" --force
+          ossutil cp artifacts/console-macos/AndlessConsole.dmg "oss://${BUCKET}/${OSS_DIR}/AndlessConsole.dmg" --endpoint="${ENDPOINT}" --region="${REGION}" --force
+          ossutil cp artifacts/console-linux/andless-console.deb "oss://${BUCKET}/${OSS_DIR}/andless-console.deb" --endpoint="${ENDPOINT}" --region="${REGION}" --force
