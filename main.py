@@ -56,8 +56,13 @@ if __name__ == '__main__':
         result = {}
 
         def do_import():
-            result['module'] = importlib.import_module('index')
-            splash.loading_thread.set_data_loaded()
+            try:
+                result['module'] = importlib.import_module('index')
+                splash.loading_thread.set_data_loaded()
+            except Exception as e:
+                result['error'] = e
+                logging.error(f"import error: {e}", exc_info=True)
+                splash.loading_thread.set_data_loaded()
 
         import_thread = Thread(target=do_import, daemon=True)
         import_thread.start()
@@ -65,6 +70,9 @@ if __name__ == '__main__':
         while import_thread.is_alive():
             app.processEvents()
             time.sleep(0.01)
+
+        if 'error' in result:
+            raise result['error']
 
         m = result['module'].MainWindow()
         splash.finish(m)

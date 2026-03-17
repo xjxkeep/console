@@ -39,9 +39,17 @@ jobs:
             --add-data "assets;assets" `
             --add-data "protocol;protocol" `
             --hidden-import uuid `
-            --hidden-import pkg `
-            --hidden-import components `
             --hidden-import qfluentwidgets `
+            --collect-submodules pkg `
+            --collect-submodules components `
+            --hidden-import index `
+            --hidden-import loader `
+            --hidden-import monitor `
+            --hidden-import controller `
+            --hidden-import debug `
+            --hidden-import about `
+            --hidden-import setting `
+            --hidden-import guide `
             --noconsole `
             --icon assets/images/logo.jpg `
             main.py
@@ -84,9 +92,17 @@ jobs:
             --add-data "assets:assets" \
             --add-data "protocol:protocol" \
             --hidden-import uuid \
-            --hidden-import pkg \
-            --hidden-import components \
             --hidden-import qfluentwidgets \
+            --collect-submodules pkg \
+            --collect-submodules components \
+            --hidden-import index \
+            --hidden-import loader \
+            --hidden-import monitor \
+            --hidden-import controller \
+            --hidden-import debug \
+            --hidden-import about \
+            --hidden-import setting \
+            --hidden-import guide \
             --windowed \
             --icon assets/images/logo.jpg \
             main.py
@@ -137,9 +153,17 @@ jobs:
             --add-data "assets:assets" \
             --add-data "protocol:protocol" \
             --hidden-import uuid \
-            --hidden-import pkg \
-            --hidden-import components \
             --hidden-import qfluentwidgets \
+            --collect-submodules pkg \
+            --collect-submodules components \
+            --hidden-import index \
+            --hidden-import loader \
+            --hidden-import monitor \
+            --hidden-import controller \
+            --hidden-import debug \
+            --hidden-import about \
+            --hidden-import setting \
+            --hidden-import guide \
             --noconsole \
             main.py
 
