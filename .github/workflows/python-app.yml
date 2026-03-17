@@ -11,6 +11,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-windows:
     runs-on: windows-2022
@@ -23,7 +26,7 @@ jobs:
           choco install ffmpeg
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -76,7 +79,7 @@ jobs:
           brew install ffmpeg create-dmg
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -137,7 +140,7 @@ jobs:
           sudo apt-get install -y ffmpeg libxcb-xinerama0 libxcb-cursor0
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -241,3 +244,41 @@ jobs:
             artifacts/console-windows/AndlessConsole-Setup.exe
             artifacts/console-macos/AndlessConsole.dmg
             artifacts/console-linux/andless-console.deb
+
+  upload-oss:
+    if: github.event_name == 'push'
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Install ossutil v2
+        run: |
+          curl -fsSL https://gosspublic.alicdn.com/ossutil/v2/install.sh | bash
+
+      - name: Configure ossutil
+        run: |
+          ossutil config set --access-key-id "${{ secrets.OSS_ACCESS_KEY_ID }}" \
+            --access-key-secret "${{ secrets.OSS_ACCESS_KEY_SECRET }}" \
+            --endpoint "${{ secrets.OSS_ENDPOINT }}"
+
+      - name: Determine upload path
+        id: oss-path
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+            echo "dir=releases/${VERSION}" >> "$GITHUB_OUTPUT"
+          else
+            echo "dir=dev/latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload to OSS
+        run: |
+          OSS_DIR="${{ steps.oss-path.outputs.dir }}"
+          BUCKET="${{ secrets.OSS_BUCKET }}"
+          ossutil cp artifacts/console-windows/AndlessConsole-Setup.exe "oss://${BUCKET}/${OSS_DIR}/AndlessConsole-Setup.exe" --force
+          ossutil cp artifacts/console-macos/AndlessConsole.dmg "oss://${BUCKET}/${OSS_DIR}/AndlessConsole.dmg" --force
+          ossutil cp artifacts/console-linux/andless-console.deb "oss://${BUCKET}/${OSS_DIR}/andless-console.deb" --force
