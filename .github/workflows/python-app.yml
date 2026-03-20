@@ -77,7 +77,7 @@ jobs:
           path: AndlessConsole-Setup.exe
 
   build-macos:
-    runs-on: macos-13
+    runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -96,6 +96,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install nuitka ordered-set zstandard imageio
+
+      - name: Fix QtWebEngine resource detection
+        run: |
+          python3 -c "
+          import os, PyQt5
+          qt_dir = os.path.join(os.path.dirname(PyQt5.__file__), 'Qt5')
+          res_dir = os.path.join(qt_dir, 'resources')
+          if not os.path.isdir(res_dir):
+              fw_res = os.path.join(qt_dir, 'lib', 'QtWebEngineCore.framework', 'Resources')
+              if os.path.isdir(fw_res):
+                  os.symlink(fw_res, res_dir)
+                  print(f'Symlinked {fw_res} -> {res_dir}')
+              else:
+                  os.makedirs(res_dir, exist_ok=True)
+                  print(f'Created empty resources dir: {res_dir}')
+          else:
+              print(f'Resources dir already exists: {res_dir}')
+          "
 
       - name: Package Application with Nuitka
         run: |
