@@ -95,54 +95,28 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install nuitka ordered-set zstandard imageio
+          pip install pyinstaller
 
-      - name: Fix QtWebEngine resource detection
+      - name: Package Application with PyInstaller
         run: |
-          python3 -c "
-          import os, PyQt5
-          qt_dir = os.path.join(os.path.dirname(PyQt5.__file__), 'Qt5')
-          res_dir = os.path.join(qt_dir, 'resources')
-          if not os.path.isdir(res_dir):
-              fw_res = os.path.join(qt_dir, 'lib', 'QtWebEngineCore.framework', 'Resources')
-              if os.path.isdir(fw_res):
-                  os.symlink(fw_res, res_dir)
-                  print(f'Symlinked {fw_res} -> {res_dir}')
-              else:
-                  os.makedirs(res_dir, exist_ok=True)
-                  print(f'Created empty resources dir: {res_dir}')
-          else:
-              print(f'Resources dir already exists: {res_dir}')
-          "
-
-      - name: Package Application with Nuitka
-        run: |
-          python -m nuitka --standalone \
-            --output-dir=dist \
-            --include-data-dir=assets=assets \
-            --include-package=protocol \
-            --include-module=uuid \
-            --include-module=qfluentwidgets \
-            --include-package=pkg \
-            --include-package=components \
-            --include-module=index \
-            --include-module=loader \
-            --include-module=monitor \
-            --include-module=controller \
-            --include-module=debug \
-            --include-module=about \
-            --include-module=setting \
-            --include-module=guide \
-            --enable-plugin=pyqt5 \
-            --macos-create-app-bundle \
-            --macos-app-name="Andless Console" \
-            --macos-app-icon=assets/images/logo.jpg \
-            --assume-yes-for-downloads \
+          pyinstaller --name "Andless Console" \
+            --add-data "assets:assets" \
+            --add-data "protocol:protocol" \
+            --hidden-import uuid \
+            --hidden-import qfluentwidgets \
+            --collect-submodules pkg \
+            --collect-submodules components \
+            --hidden-import index \
+            --hidden-import loader \
+            --hidden-import monitor \
+            --hidden-import controller \
+            --hidden-import debug \
+            --hidden-import about \
+            --hidden-import setting \
+            --hidden-import guide \
+            --windowed \
+            --icon assets/images/logo.jpg \
             main.py
-
-      - name: Rename app bundle
-        run: |
-          mv "dist/main.app" "dist/Andless Console.app"
 
       - name: Create DMG installer
         run: |
