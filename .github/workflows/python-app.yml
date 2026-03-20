@@ -34,28 +34,40 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pyinstaller
+          pip install nuitka ordered-set zstandard
 
-      - name: Package Application with PyInstaller
+      - name: Convert icon to ICO format
         run: |
-          pyinstaller --name console `
-            --add-data "assets;assets" `
-            --add-data "protocol;protocol" `
-            --hidden-import uuid `
-            --hidden-import qfluentwidgets `
-            --collect-submodules pkg `
-            --collect-submodules components `
-            --hidden-import index `
-            --hidden-import loader `
-            --hidden-import monitor `
-            --hidden-import controller `
-            --hidden-import debug `
-            --hidden-import about `
-            --hidden-import setting `
-            --hidden-import guide `
-            --noconsole `
-            --icon assets/images/logo.jpg `
+          python -c "from PIL import Image; img = Image.open('assets/images/logo.jpg'); img.save('assets/images/logo.ico', format='ICO', sizes=[(256,256),(48,48),(32,32),(16,16)])"
+
+      - name: Package Application with Nuitka
+        run: |
+          python -m nuitka --standalone `
+            --output-dir=dist `
+            --output-filename=console.exe `
+            --include-data-dir=assets=assets `
+            --include-package=protocol `
+            --include-module=uuid `
+            --include-module=qfluentwidgets `
+            --include-package=pkg `
+            --include-package=components `
+            --include-module=index `
+            --include-module=loader `
+            --include-module=monitor `
+            --include-module=controller `
+            --include-module=debug `
+            --include-module=about `
+            --include-module=setting `
+            --include-module=guide `
+            --enable-plugin=pyqt5 `
+            --disable-console `
+            --windows-icon-from-ico=assets/images/logo.ico `
+            --assume-yes-for-downloads `
             main.py
+
+      - name: Prepare distribution
+        run: |
+          Move-Item -Path "dist\main.dist" -Destination "dist\console"
 
       - name: Create NSIS installer
         uses: joncloud/makensis-action@v4
@@ -87,28 +99,36 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pyinstaller
+          pip install nuitka ordered-set zstandard
 
-      - name: Package Application with PyInstaller
+      - name: Package Application with Nuitka
         run: |
-          pyinstaller --name "Andless Console" \
-            --add-data "assets:assets" \
-            --add-data "protocol:protocol" \
-            --hidden-import uuid \
-            --hidden-import qfluentwidgets \
-            --collect-submodules pkg \
-            --collect-submodules components \
-            --hidden-import index \
-            --hidden-import loader \
-            --hidden-import monitor \
-            --hidden-import controller \
-            --hidden-import debug \
-            --hidden-import about \
-            --hidden-import setting \
-            --hidden-import guide \
-            --windowed \
-            --icon assets/images/logo.jpg \
+          python -m nuitka --standalone \
+            --output-dir=dist \
+            --include-data-dir=assets=assets \
+            --include-package=protocol \
+            --include-module=uuid \
+            --include-module=qfluentwidgets \
+            --include-package=pkg \
+            --include-package=components \
+            --include-module=index \
+            --include-module=loader \
+            --include-module=monitor \
+            --include-module=controller \
+            --include-module=debug \
+            --include-module=about \
+            --include-module=setting \
+            --include-module=guide \
+            --enable-plugin=pyqt5 \
+            --macos-create-app-bundle \
+            --macos-app-name="Andless Console" \
+            --macos-app-icon=assets/images/logo.jpg \
+            --assume-yes-for-downloads \
             main.py
+
+      - name: Rename app bundle
+        run: |
+          mv "dist/main.app" "dist/Andless Console.app"
 
       - name: Create DMG installer
         run: |
@@ -137,7 +157,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libxcb-xinerama0 libxcb-cursor0
+          sudo apt-get install -y ffmpeg libxcb-xinerama0 libxcb-cursor0 patchelf
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -148,27 +168,35 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pyinstaller
+          pip install nuitka ordered-set zstandard
 
-      - name: Package Application with PyInstaller
+      - name: Package Application with Nuitka
         run: |
-          pyinstaller --name console \
-            --add-data "assets:assets" \
-            --add-data "protocol:protocol" \
-            --hidden-import uuid \
-            --hidden-import qfluentwidgets \
-            --collect-submodules pkg \
-            --collect-submodules components \
-            --hidden-import index \
-            --hidden-import loader \
-            --hidden-import monitor \
-            --hidden-import controller \
-            --hidden-import debug \
-            --hidden-import about \
-            --hidden-import setting \
-            --hidden-import guide \
-            --noconsole \
+          python -m nuitka --standalone \
+            --output-dir=dist \
+            --output-filename=console \
+            --include-data-dir=assets=assets \
+            --include-package=protocol \
+            --include-module=uuid \
+            --include-module=qfluentwidgets \
+            --include-package=pkg \
+            --include-package=components \
+            --include-module=index \
+            --include-module=loader \
+            --include-module=monitor \
+            --include-module=controller \
+            --include-module=debug \
+            --include-module=about \
+            --include-module=setting \
+            --include-module=guide \
+            --enable-plugin=pyqt5 \
+            --disable-console \
+            --assume-yes-for-downloads \
             main.py
+
+      - name: Prepare distribution
+        run: |
+          mv dist/main.dist dist/console
 
       - name: Build .deb package
         run: |

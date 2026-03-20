@@ -5,7 +5,7 @@ PyQt-Fluent-Widgets
 asyncqt
 protobuf
 uuid
-pyinstaller
+nuitka
 opencv-python
 qrcode
 sounddevice

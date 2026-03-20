@@ -6,11 +6,31 @@ gen-proto:
 	@echo "done"
 
 build:
-	pyinstaller -n console_${GIT_HASH} main.py --hidden-import uuid
+	python -m nuitka --standalone \
+		--output-dir=dist \
+		--output-filename=console_${GIT_HASH} \
+		--include-data-dir=assets=assets \
+		--include-package=protocol \
+		--include-module=uuid \
+		--include-module=qfluentwidgets \
+		--include-package=pkg \
+		--include-package=components \
+		--include-module=index \
+		--include-module=loader \
+		--include-module=monitor \
+		--include-module=controller \
+		--include-module=debug \
+		--include-module=about \
+		--include-module=setting \
+		--include-module=guide \
+		--enable-plugin=pyqt5 \
+		--assume-yes-for-downloads \
+		main.py
+	mv dist/main.dist dist/console_${GIT_HASH}
 	mkdir -p application/app application/assets
 	mv dist/console_${GIT_HASH} application/app
 	cp -r assets/* application/assets
-	cd application && ln -s  ./app/console_${GIT_HASH}/console_${GIT_HASH} console
+	cd application && ln -s ./app/console_${GIT_HASH}/console_${GIT_HASH} console
 
 
 
