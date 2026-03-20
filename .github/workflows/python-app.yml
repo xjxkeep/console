@@ -56,7 +56,7 @@ jobs:
             --include-module=setting `
             --include-module=guide `
             --enable-plugin=pyqt5 `
-            --disable-console `
+            --windows-console-mode=disable `
             --windows-icon-from-ico=assets/images/logo.ico `
             --assume-yes-for-downloads `
             main.py
@@ -186,7 +186,6 @@ jobs:
             --include-module=setting \
             --include-module=guide \
             --enable-plugin=pyqt5 \
-            --disable-console \
             --assume-yes-for-downloads \
             main.py
 
