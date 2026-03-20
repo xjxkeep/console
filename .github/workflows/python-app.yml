@@ -118,7 +118,7 @@ jobs:
             --enable-plugin=pyqt5 \
             --macos-create-app-bundle \
             --macos-app-name="Andless Console" \
-            --macos-app-icon=assets/images/logo.ico \
+            --macos-app-icon=assets/images/logo.jpg \
             --assume-yes-for-downloads \
             main.py
 
