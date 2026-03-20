@@ -36,10 +36,6 @@ jobs:
           pip install -r requirements.txt
           pip install nuitka ordered-set zstandard
 
-      - name: Convert icon to ICO format
-        run: |
-          python -c "from PIL import Image; img = Image.open('assets/images/logo.jpg'); img.save('assets/images/logo.ico', format='ICO', sizes=[(256,256),(48,48),(32,32),(16,16)])"
-
       - name: Package Application with Nuitka
         run: |
           python -m nuitka --standalone `
@@ -122,7 +118,7 @@ jobs:
             --enable-plugin=pyqt5 \
             --macos-create-app-bundle \
             --macos-app-name="Andless Console" \
-            --macos-app-icon=assets/images/logo.jpg \
+            --macos-app-icon=assets/images/logo.ico \
             --assume-yes-for-downloads \
             main.py
 
@@ -223,8 +219,8 @@ jobs:
           sed -i 's/^          //' $PKG_ROOT/usr/share/applications/andless-console.desktop
 
           # 图标
-          if [ -f assets/images/logo.jpg ]; then
-            cp assets/images/logo.jpg $PKG_ROOT/usr/share/icons/hicolor/256x256/apps/andless-console.jpg
+          if [ -f assets/images/logo.ico ]; then
+            cp assets/images/logo.ico $PKG_ROOT/usr/share/icons/hicolor/256x256/apps/andless-console.ico
           fi
 
           # control 文件：版本号必须以数字开头，非 tag 时使用 0.0.0-dev
