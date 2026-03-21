@@ -3,7 +3,8 @@ from pkg.model import Version
 from PyQt5.QtCore import QThread,pyqtSignal,QProcess,QObject
 from PyQt5.QtWidgets import QApplication
 from pkg.api import API
-import os, sys, json, hashlib, shutil, tempfile, zipfile
+from pkg.version import VERSION, CHANNEL, COMMIT, BUILD_TIME
+import os, sys, json, hashlib, shutil, tempfile, zipfile, logging
 from pyshortcuts import make_shortcut
 from qfluentwidgets import ProgressBar,MessageBox,Dialog
 
@@ -76,23 +77,37 @@ class VersionManager(QObject):
     
     def __init__(self,setting:dict,api:API,parent:QObject=None):
         super().__init__(parent)
-        self.dialog=Dialog("更新","检测到新版本，点击更新。",parent)
+        self.dialog=Dialog("更新","检测到新版本，请前往官网下载最新版本。",parent)
         self.progressToast=ProgressBar(parent=parent,useAni=True)
         self.setting=setting
         self.version_dir=setting.get("version_dir","assets/version")
         self.local_version=Version.model_validate_json(setting.get("version","{}"))
         self.remote_version=None
         self.api=api
-    
+
     def check_update(self) -> bool:
-        self.remote_version=self.api.check_version()
-        if self.local_version.version ==None or self.remote_version.version!=self.local_version.version:
-            self.new_version_found.emit(self.remote_version)
-            if self.dialog.exec()==0:
-                self.update()
-            return True
-        else:
+        try:
+            remote = self.api.check_version_v2(channel=CHANNEL)
+        except Exception as e:
+            logging.warning(f"Version check failed: {e}")
             return False
+
+        has_update = False
+        if CHANNEL == "release":
+            remote_ver = remote.get("version", "")
+            has_update = remote_ver != "" and remote_ver != VERSION
+        else:
+            remote_time = remote.get("build_time", "")
+            remote_commit = remote.get("commit", "")
+            if remote_commit and COMMIT:
+                has_update = remote_commit != COMMIT
+            elif remote_time and BUILD_TIME:
+                has_update = remote_time > BUILD_TIME
+
+        if has_update:
+            self.dialog.exec()
+            return True
+        return False
 
     def update(self):
         url=self.remote_version.url

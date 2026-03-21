@@ -21,6 +21,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Generate version.json
+        shell: pwsh
+        run: |
+          if ("${{ github.ref }}" -like "refs/tags/v*") {
+            $version = "${{ github.ref }}".Replace("refs/tags/v", "")
+            $channel = "release"
+          } else {
+            $version = ""
+            $channel = "dev"
+          }
+          $info = @{
+            channel = $channel
+            version = $version
+            commit = "${{ github.sha }}"
+            build_time = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ" -AsUTC)
+          }
+          $info | ConvertTo-Json | Set-Content -Path "assets/version.json" -Encoding UTF8
+
       - name: Install ffmpeg
         run: |
           choco install ffmpeg
@@ -82,6 +100,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Generate version.json
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            CHANNEL="release"
+          else
+            VERSION=""
+            CHANNEL="dev"
+          fi
+          cat > assets/version.json << EOF
+          {
+            "channel": "${CHANNEL}",
+            "version": "${VERSION}",
+            "commit": "${GITHUB_SHA}",
+            "build_time": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          sed -i '' 's/^          //' assets/version.json
+
       - name: Install ffmpeg and create-dmg
         run: |
           brew install ffmpeg create-dmg
@@ -141,6 +178,25 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Generate version.json
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            CHANNEL="release"
+          else
+            VERSION=""
+            CHANNEL="dev"
+          fi
+          cat > assets/version.json << EOF
+          {
+            "channel": "${CHANNEL}",
+            "version": "${VERSION}",
+            "commit": "${GITHUB_SHA}",
+            "build_time": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          sed -i 's/^          //' assets/version.json
 
       - name: Install system dependencies
         run: |
@@ -277,12 +333,30 @@ jobs:
           sudo mv ossutil-2.2.1-linux-amd64/ossutil /usr/local/bin/
           ossutil version
 
+      - name: Generate version.json
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            CHANNEL="release"
+          else
+            VERSION=""
+            CHANNEL="dev"
+          fi
+          cat > version.json << EOF
+          {
+            "channel": "${CHANNEL}",
+            "version": "${VERSION}",
+            "commit": "${GITHUB_SHA}",
+            "build_time": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          sed -i 's/^          //' version.json
+
       - name: Determine upload path
         id: oss-path
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/}"
-            echo "dir=releases/${VERSION}" >> "$GITHUB_OUTPUT"
+            echo "dir=release/latest" >> "$GITHUB_OUTPUT"
           else
             echo "dir=dev/latest" >> "$GITHUB_OUTPUT"
           fi
@@ -299,3 +373,4 @@ jobs:
           ossutil cp artifacts/console-windows/AndlessConsole-Setup.exe "oss://${BUCKET}/${OSS_DIR}/AndlessConsole-Setup.exe" --endpoint="${ENDPOINT}" --region="${REGION}" --force
           ossutil cp artifacts/console-macos/AndlessConsole.dmg "oss://${BUCKET}/${OSS_DIR}/AndlessConsole.dmg" --endpoint="${ENDPOINT}" --region="${REGION}" --force
           ossutil cp artifacts/console-linux/andless-console.deb "oss://${BUCKET}/${OSS_DIR}/andless-console.deb" --endpoint="${ENDPOINT}" --region="${REGION}" --force
+          ossutil cp version.json "oss://${BUCKET}/${OSS_DIR}/version.json" --endpoint="${ENDPOINT}" --region="${REGION}" --force

@@ -147,8 +147,13 @@ class API:
         response.raise_for_status()
         response = VersionResponse.model_validate_json(json_data=response.content)
         return response.data
-    
-    
+
+    def check_version_v2(self, channel: str = "release") -> dict:
+        path = f"/api/version/check?channel={channel}"
+        response = requests.get(f"{self.base_url}{path}", timeout=10)
+        response.raise_for_status()
+        return response.json()
+
     def close(self):
         self.deleteLater()
         logging.info("api closed")
