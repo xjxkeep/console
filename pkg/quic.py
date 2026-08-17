@@ -686,6 +686,7 @@ class HighwayQuicClient(QObject):
         await self._establish_generic_stream(
             stream_name="feedback", message_type=Device.MessageType.VIDEO_FEEDBACK,
             client=p2p, attr_prefix="p2p_",
+            device_type=Device.DeviceType.CONTROLLER,
         )
 
         # ntp
@@ -729,7 +730,7 @@ class HighwayQuicClient(QObject):
             return p2p_writer
         return getattr(self, f"{stream_name}_writer", None)
 
-    async def _establish_generic_stream(self, stream_name, message_type, read_task_func=None, need_subscribe=True, subscribe_id=None, client=None, attr_prefix=""):
+    async def _establish_generic_stream(self, stream_name, message_type, read_task_func=None, need_subscribe=True, subscribe_id=None, client=None, attr_prefix="", device_type=None):
         """通用的流建立方法，减少重复代码
 
         Args:
@@ -739,6 +740,7 @@ class HighwayQuicClient(QObject):
             need_subscribe: 是否需要订阅设备
             client: QUIC 客户端连接，默认使用 public_client
             attr_prefix: 属性前缀，P2P 侧传 "p2p_"
+            device_type: 设备类型，默认 RECEIVER；subscribe_device 自动取反
         """
         if client is None:
             client = self.public_client
@@ -754,21 +756,32 @@ class HighwayQuicClient(QObject):
             setattr(self, reader_attr, reader)
             setattr(self, writer_attr, writer)
             
+            # 确定设备类型及对应的订阅设备类型
+            if device_type is None:
+                device_type = Device.DeviceType.CONTROLLER
+            subscribe_device_type = (
+                Device.DeviceType.RECEIVER
+                if device_type == Device.DeviceType.CONTROLLER
+                else Device.DeviceType.CONTROLLER
+            )
+
             # 创建注册消息
             register_kwargs = {
                 'device': Device(
                     id=int(self.setting.device_id),
-                    message_type=message_type
+                    message_type=message_type,
+                    device_type=device_type
                 )
             }
-            
+
             # 如果需要订阅，添加订阅设备
             if need_subscribe:
-                
+
                 subscribe_id=subscribe_id if subscribe_id else int(self.setting.subscribe_id)
                 register_kwargs['subscribe_device'] = Device(
                     id=subscribe_id,
-                    message_type=message_type
+                    message_type=message_type,
+                    device_type=subscribe_device_type
                 )
             
             register_msg = Register(**register_kwargs)
@@ -1064,8 +1077,7 @@ class HighwayQuicClient(QObject):
         self.feedback_reader,self.feedback_writer = await self._establish_generic_stream(
             stream_name="feedback",
             message_type=Device.MessageType.VIDEO_FEEDBACK,
-            # need_subscribe=True,
-            # subscribe_id=int(self.setting.device_id)
+            device_type=Device.DeviceType.CONTROLLER,
         )
         self.create_task(self.__send_feedback_message(writer=self.feedback_writer))
         # self.create_task(self.__read_feedback_stream(reader=self.feedback_reader))
@@ -1088,7 +1100,7 @@ class HighwayQuicClient(QObject):
                 w = self._get_writer("feedback") or writer
                 await self.send_message(writer=w, message=VideoFeedback(received_frame_index=self.receive_video_count), flush=False)
                 await asyncio.sleep(0.2)
-                logging.debug(f"send feedback message {self.receive_video_count}")
+                logging.debug(f"send feedback message {self.receive_video_count} with writer {id(writer)}")
             except Exception as e:
                 logging.error(f"发送反馈消息错误: {e}")
                 break
@@ -1261,7 +1273,6 @@ class HighwayQuicClient(QObject):
 
         finally:
             logging.info("_read_video_stream quit")
-
 
 
 

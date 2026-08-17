@@ -886,10 +886,14 @@ class P2PHolePuncher:
                 return None
 
             # 1. 连接信令
+            logging.debug(f"连接信令服务器: {self.signaling_host}:{self.signaling_port}")
             sc.connect(self.signaling_host, self.signaling_port)
+            logging.debug("已连接信令服务器")
 
             # 2. 加入房间
+            logging.debug(f"加入房间: {self.room_id}")
             sc.join_as_subscriber(self.room_id)
+            logging.debug("已加入房间，等待 start_stun")
 
             # 3. 等待 start_stun
             if not sc.wait_for_start_stun(self._stop_event):
@@ -897,6 +901,7 @@ class P2PHolePuncher:
                 return None
 
             # 4. STUN 探测
+            logging.debug("开始 STUN 探测")
             public_addr = get_public_addr_via_stun(sock, stop_event=self._stop_event)
             if not public_addr:
                 logging.error("STUN 探测失败")
