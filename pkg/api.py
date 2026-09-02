@@ -149,7 +149,7 @@ class API:
         return response.data
 
     def check_version_v2(self, channel: str = "release") -> dict:
-        path = f"/api/version/check?channel={channel}"
+        path = f"/api/version/check?app=dashboard&channel={channel}"
         response = requests.get(f"{self.base_url}{path}", timeout=10)
         response.raise_for_status()
         return response.json()
